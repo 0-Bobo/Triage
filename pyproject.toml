@@ -1,0 +1,156 @@
+[project]
+name = "triage"
+version = "2.0.0"
+description = "Triage — CTF Binary Analysis Workbench (web edition)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+  "python-multipart>=0.0.9",
+  "capstone>=5.0",
+  "pyelftools>=0.29",
+  "pefile>=2023.2.7",
+]
+
+[project.optional-dependencies]
+# Heavy / platform-specific analysis backends — all runtime-optional
+# (the app degrades gracefully via HAS_* feature flags).
+analysis = [
+  "lief>=0.14",
+  "keystone-engine>=0.9.2",
+  "z3-solver>=4.12",
+  "angr>=9.2",
+  "unicorn>=2.0",
+  "flare-capa>=7.0",
+  "r2pipe>=1.7",
+]
+# PyQt6 desktop edition (triage.py)
+desktop = ["PyQt6>=6.4", "qtawesome>=1.2.3", "qt-material>=2.14"]
+# pwntools for the generated exploit solver scripts
+exploit = ["pwntools>=4.15"]
+
+[project.scripts]
+triage-web = "triage_web.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6.9", "pre-commit>=3.8", "pip-audit>=2.7"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["triage_web"]
+artifacts = ["triage_web/index.html"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["samples", "wsl", "capa-rules"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "UP",  # pyupgrade
+  "RUF", # ruff-specific (mutable defaults, unused noqa, …)
+  "S",   # flake8-bandit
+]
+ignore = [
+  "S101",    # assert — used as invariant checks and throughout the tests
+  "RUF012",  # class-level constant dicts/sets are not "mutable defaults" here
+  "RUF001",  # en/em dashes are deliberate typography in UI strings
+  "RUF002",  # ...and in docstrings
+]
+
+[tool.ruff.lint.per-file-ignores]
+# frontend.py is a single embedded HTML/CSS/JS document string — never wrap it.
+"triage_web/frontend.py" = ["E501"]
+# knowledge.py embeds aligned tables; solvers.py runs the user's own solver
+# script via subprocess — that IS the feature.
+"triage_web/knowledge.py" = ["E501"]
+"triage_web/solvers.py" = ["E501", "S603"]
+# loader.py: md5/sha1 are file *identifiers*, not security; `strings`/`objdump`
+# are trusted tools resolved from PATH.
+"triage_web/loader.py" = ["S324", "S603", "S607"]
+# The legacy PyQt6 desktop edition (interactive Python console, local GUI) is
+# not on the active refactor path.
+"apps/desktop/triage.py" = [
+  "E402", "E501", "E741", "F401", "E401", "B007", "B904", "UP", "S", "RUF013",
+]
+"main.py" = ["E402"]
+# Regression tests keep long hex fixture literals inline.
+"tests/test_engine.py" = ["E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are the documented default-arg pattern.
+extend-immutable-calls = ["fastapi.Form", "fastapi.File", "fastapi.Query", "fastapi.Depends"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+  "--strict-markers",
+  "--strict-config",
+  "--verbose",
+]
+markers = [
+  "slow: marks tests as slow",
+  "integration: marks tests as integration tests",
+]
+filterwarnings = [
+  "error",
+  # Starlette's TestClient warns once (at import) that it uses httpx, not httpx2.
+  "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["triage_web"]
+omit = [
+  "*/test_*.py",
+  "tests/*",
+  ".venv/*",
+  "venv/*",
+  "*/site-packages/*",
+  "triage_web/__main__.py",  # `python -m triage_web` shim
+  # Experimental Ghidra-style p-code decompiler pipeline — reachable from no
+  # HTTP route (only engine.decompile_with_pcode, which nothing calls).
+  # Drop these from the omit list once it's wired up and tested.
+  "triage_web/pcode.py",
+  "triage_web/cfg.py",
+  "triage_web/ssa_engine.py",
+  "triage_web/emit_c.py",
+  "triage_web/decompile_actions.py",
+]
+
+[tool.coverage.report]
+# The shipped surface is fully covered; keep it that way. The experimental
+# p-code pipeline (pcode/cfg/ssa_engine/emit_c/decompile_actions) is omit-ed
+# above and is the only untested code in the package.
+fail_under = 100
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
+  # optional-dependency guards — only reachable by uninstalling the lib
+  "except ImportError",
+  'if __name__ == "__main__":',
+  # engine's alternate p-code decompiler entry points — call the omit-ed
+  # experimental pipeline and are reachable from no route.
+  "def decompile_with_pcode",
+]

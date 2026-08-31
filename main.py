@@ -7,8 +7,9 @@ Usage:
     python main.py [binary] [--host HOST] [--port PORT]
     python -m triage_web [binary] [--host HOST] [--port PORT]
 """
-import sys
+
 import os
+import sys
 
 # Ensure the package directory is importable
 _pkg_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,5 +18,5 @@ if _pkg_dir not in sys.path:
 
 from triage_web.server import main
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -13,11 +13,11 @@ Pipeline:
 """
 
 from __future__ import annotations
-from collections import defaultdict
-from typing import Dict, List, Optional, Set, DefaultDict
 
-from .pcode import OpCode, PcodeOp, Varnode, AddressSpace
+from collections import defaultdict
+
 from .cfg import BasicBlock, BlockGraph, DominatorTree
+from .pcode import AddressSpace, OpCode, PcodeOp, Varnode
 
 
 class SSAContext:
@@ -32,11 +32,11 @@ class SSAContext:
     def __init__(self, graph: BlockGraph):
         self.graph = graph
         # All varnodes in the function
-        self.varnodes: List[Varnode] = []
+        self.varnodes: list[Varnode] = []
         # Varnode version tracking
-        self._next_version: DefaultDict[str, int] = defaultdict(int)
+        self._next_version: defaultdict[str, int] = defaultdict(int)
         # Stack of current version per varname during renaming
-        self._version_stack: DefaultDict[str, List[int]] = defaultdict(list)
+        self._version_stack: defaultdict[str, list[int]] = defaultdict(list)
 
     def reset(self):
         self.varnodes.clear()
@@ -54,7 +54,7 @@ def build_ssa(graph: BlockGraph) -> SSAContext:
     domtree.compute()
 
     # Step 1: Collect def-sites (which block defines which varname)
-    defsites: DefaultDict[str, Set[BasicBlock]] = defaultdict(set)
+    defsites: defaultdict[str, set[BasicBlock]] = defaultdict(set)
     for block in graph.blocks:
         for op in block.ops:
             if op.output:
@@ -62,8 +62,7 @@ def build_ssa(graph: BlockGraph) -> SSAContext:
                 defsites[varname].add(block)
 
     # Step 2: Place φ-nodes at dominance frontiers
-    phi_blocks: DefaultDict[str, Set[BasicBlock]] = _place_phi_nodes(
-        defsites, domtree)
+    phi_blocks: defaultdict[str, set[BasicBlock]] = _place_phi_nodes(defsites, domtree)
 
     # Step 3: Insert φ-nodes into blocks
     _insert_phi_nodes(graph, phi_blocks)
@@ -79,23 +78,20 @@ def build_ssa(graph: BlockGraph) -> SSAContext:
 
 def _varname_key(vn: Varnode) -> str:
     """Get a canonical name string for a varnode (space+offset)."""
-    return f'{vn.space.name}:{vn.offset}:{vn.size}'
+    return f"{vn.space.name}:{vn.offset}:{vn.size}"
 
 
-def _place_phi_nodes(
-    defsites: Dict[str, Set[BasicBlock]],
-    domtree: DominatorTree
-) -> DefaultDict[str, Set[BasicBlock]]:
+def _place_phi_nodes(defsites: dict[str, set[BasicBlock]], domtree: DominatorTree) -> defaultdict[str, set[BasicBlock]]:
     """Place φ-nodes using the dominance frontier criterion.
 
     For each varname, a φ-node is needed at every block in the
     dominance frontier of any block that defines that varname.
     """
-    phi_blocks: DefaultDict[str, Set[BasicBlock]] = defaultdict(set)
+    phi_blocks: defaultdict[str, set[BasicBlock]] = defaultdict(set)
 
     for varname, defblocks in defsites.items():
         # Skip constant varnames — never need φ
-        if varname.startswith('const:'):
+        if varname.startswith("const:"):
             continue
 
         work = list(defblocks)
@@ -113,8 +109,7 @@ def _place_phi_nodes(
     return phi_blocks
 
 
-def _insert_phi_nodes(graph: BlockGraph,
-                       phi_blocks: Dict[str, Set[BasicBlock]]):
+def _insert_phi_nodes(graph: BlockGraph, phi_blocks: dict[str, set[BasicBlock]]):
     """Insert CPUI_MULTIEQUAL (φ) ops at the start of each relevant block."""
     for block in graph.blocks:
         varnames = [v for v, blocks in phi_blocks.items() if block in blocks]
@@ -124,7 +119,7 @@ def _insert_phi_nodes(graph: BlockGraph,
         phi_ops = []
         for varname in varnames:
             # Parse space, offset, size from varname key
-            parts = varname.split(':')
+            parts = varname.split(":")
             space_name = parts[0]
             offset = int(parts[1]) if parts[1] else 0
             size = int(parts[2]) if len(parts) > 2 else 8
@@ -141,8 +136,7 @@ def _insert_phi_nodes(graph: BlockGraph,
         block.ops = phi_ops + block.ops
 
 
-def _rename_variables(graph: BlockGraph, domtree: DominatorTree,
-                      ctx: SSAContext):
+def _rename_variables(graph: BlockGraph, domtree: DominatorTree, ctx: SSAContext):
     """Rename varnodes via dominator tree walk.
 
     Each varnode gets a unique SSA version number.
@@ -152,9 +146,10 @@ def _rename_variables(graph: BlockGraph, domtree: DominatorTree,
     - When encountering a use: peek current version from stack
     - Pop versions when leaving a block
     """
+
     def rename(block: BasicBlock):
         # Track which varnames we pushed in this block (for cleanup)
-        pushed: List[str] = []
+        pushed: list[str] = []
 
         # Rename φ outputs first
         for op in block.ops:
@@ -173,7 +168,7 @@ def _rename_variables(graph: BlockGraph, domtree: DominatorTree,
                 continue
 
             # Rename inputs (uses)
-            for i, inp in enumerate(op.inputs):
+            for inp in op.inputs:
                 if inp.is_constant():
                     continue
                 varname = _varname_key(inp)
@@ -223,6 +218,7 @@ def _build_def_use(ctx: SSAContext):
 
 # ── SSA Simplification Passes ─────────────────────────────────────────
 
+
 class SSASimplifier:
     """Run SSA simplification passes on the constructed SSA form.
 
@@ -252,7 +248,7 @@ class SSASimplifier:
         Algorithm: backward from essential ops (stores, branches, returns,
         calls), mark all reaching varnodes as necessary. Remove the rest.
         """
-        necessary: Set[Varnode] = set()
+        necessary: set[Varnode] = set()
 
         def mark(vn: Varnode):
             if vn in necessary or vn.is_constant():
@@ -305,7 +301,7 @@ class SSASimplifier:
                         dst.uses.clear()
         return changed
 
-    def constant_propagation(self, lattice: Dict[str, Optional[int]] = None) -> bool:
+    def constant_propagation(self, lattice: dict[str, int | None] | None = None) -> bool:
         """Forward constant propagation using a lattice.
 
         For each op where all inputs are constant → compute constant output.
@@ -345,7 +341,7 @@ class SSASimplifier:
 
         return changed
 
-    def _eval_op(self, opcode: OpCode, inputs: List[int]) -> Optional[int]:
+    def _eval_op(self, opcode: OpCode, inputs: list[int]) -> int | None:
         """Evaluate a p-code op with constant inputs."""
         if opcode == OpCode.INT_ADD:
             return inputs[0] + inputs[1] if len(inputs) >= 2 else None
@@ -389,6 +385,7 @@ class SSASimplifier:
 
 # ── Backward-compatible SSAMemory for legacy decompiler ─────────────────
 
+
 class SSAMemory:
     """Store-forwarding cache used by engine.py's legacy decompiler.
 
@@ -402,7 +399,7 @@ class SSAMemory:
 
     def store(self, dst: str, src: str, regs: dict) -> None:
         """Record that `src` (a register name) was stored to `dst` (a stack slot)."""
-        if src in regs and hasattr(regs[src], 'op'):
+        if src in regs and hasattr(regs[src], "op"):
             self._cache[dst.lower()] = regs[src]
         else:
             self._cache.pop(dst.lower(), None)

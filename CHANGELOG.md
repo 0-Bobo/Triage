@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.1.0] — 2026-08-31 — Cross-platform + tooling
+
+### Added
+- Runs on native **Windows** and from **WSL** (`wsl/` holds the shell config,
+  kept on the Windows filesystem and sourced from `~/.zshrc`).
+- `triage_web/analysis.py` — the binary-analysis / exploit-intel helpers,
+  extracted from `server.py` and unit-tested directly.
+- Rebuilt **Hex tab**: offset ⇄ virtual-address modes, paging, section jump,
+  hover/selection inspector (u8…u64 LE/BE), byte/string search
+  (`/api/hex`, `/api/hex/search` rewritten).
+- Deeper `/api/vuln-hints`: win-function detection, resolved `&"/bin/sh"`,
+  ROP-staple addresses, per-function overflow-offset estimates, and
+  ranked attack paths each with a ready-to-edit pwntools skeleton.
+- Solvers: `triton_solve_flag`, `unicorn_emulate_func` templates.
+- Dev tooling: `pyproject.toml` (uv), `ruff` (E/W/F/I/B/C4/UP/RUF/S),
+  `pytest` + coverage gate, `pre-commit`, `Makefile`, GitHub Actions,
+  `pip-audit`, committed `uv.lock`, `.gitattributes`, Dependabot.
+- Test suites: `tests/{test_web_api,test_analysis,test_solvers,test_xref,
+  test_loader}.py` — 127 tests, ~75 % coverage of shipped code.
+
+### Changed
+- Server session state is a typed `Session` dataclass with `require_*`
+  accessors (was an untyped module dict).
+- The SPA moved from an inline string in `frontend.py` to
+  `triage_web/index.html`.
+- The desktop PyQt6 edition moved to `apps/desktop/triage.py`.
+
+### Fixed
+- `_suggest_var_names` could emit two identically-named C variables.
+- `/api/disasm/decompile` `func_name` was always empty.
+- Hex tab showed nothing for unmapped/`0x0` addresses (added a
+  file-offset fallback + `Cache-Control: no-store`).
+- `static_string_reconstruct` solver decoded the whole file as code and
+  mis-sized `dword` writes → garbage; now section-scoped, per-function.
+- Windows: `server.main()` `fuser`/`fd=` startup, `/tmp` paths, solver
+  temp-file encoding, `/api/capa` 500 → 400, `loader._clear_caches()`
+  `AttributeError` on the 2nd load.
+- `_suggest_var_names` `NameError` (`var_key`), `emit_c` `PREC` dup keys.
+
 ## [Unreleased] — Pseudo-C Decompiler
 
 ### Added

@@ -13,15 +13,15 @@ Pipeline phases:
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Set, Tuple
 
-from .pcode import OpCode, PcodeOp, Varnode
+from abc import ABC, abstractmethod
+
 from .cfg import BasicBlock
+from .pcode import OpCode, PcodeOp, Varnode
 from .ssa_engine import SSAContext, _varname_key
 
-
 # ── Action Base Class ─────────────────────────────────────────────────
+
 
 class Action(ABC):
     """Base class for all decompiler transformation passes.
@@ -32,7 +32,7 @@ class Action(ABC):
     def __init__(self, name: str, repeat: bool = False):
         self.name = name
         self.repeat = repeat  # Whether to repeat until no change
-        self._count = 0       # Number of changes made
+        self._count = 0  # Number of changes made
 
     @abstractmethod
     def apply(self, ctx: SSAContext) -> bool:
@@ -52,6 +52,7 @@ class Action(ABC):
 
 # ── Action Pipeline ───────────────────────────────────────────────────
 
+
 class ActionPipeline:
     """Sequenced pipeline of transformation actions.
 
@@ -66,25 +67,26 @@ class ActionPipeline:
     """
 
     def __init__(self):
-        self.phases: List[Tuple[str, List[Action]]] = []
+        self.phases: list[tuple[str, list[Action]]] = []
 
-    def add_phase(self, name: str, actions: List[Action]):
+    def add_phase(self, name: str, actions: list[Action]):
         self.phases.append((name, actions))
 
     def run(self, ctx: SSAContext):
-        for name, actions in self.phases:
+        for _phase_name, actions in self.phases:
             for action in actions:
                 action.run(ctx)
 
     def print_stats(self):
-        for name, actions in self.phases:
+        for _phase_name, actions in self.phases:
             for a in actions:
-                print(f'  {a.name}: {a._count} changes')
+                print(f"  {a.name}: {a._count} changes")
 
 
 # ══════════════════════════════════════════════════════════════════════
 # Phase 1: First-Pass Simplification
 # ══════════════════════════════════════════════════════════════════════
+
 
 class DeadCodeElimination(Action):
     """Remove ops whose outputs have no consumers.
@@ -94,10 +96,10 @@ class DeadCodeElimination(Action):
     """
 
     def __init__(self):
-        super().__init__('dead_code_elimination', repeat=True)
+        super().__init__("dead_code_elimination", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
-        necessary: Set[Varnode] = set()
+        necessary: set[Varnode] = set()
 
         def mark(vn: Varnode):
             if vn in necessary or vn.is_constant():
@@ -140,7 +142,7 @@ class CopyPropagation(Action):
     """
 
     def __init__(self):
-        super().__init__('copy_propagation', repeat=True)
+        super().__init__("copy_propagation", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -169,8 +171,8 @@ class ConstantPropagation(Action):
     """
 
     def __init__(self):
-        super().__init__('constant_propagation', repeat=True)
-        self._lattice: Dict[str, Optional[int]] = {}
+        super().__init__("constant_propagation", repeat=True)
+        self._lattice: dict[str, int | None] = {}
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -205,7 +207,7 @@ class ConstantPropagation(Action):
 
         return changed
 
-    def _eval_op(self, opcode: OpCode, vals: List[int]) -> Optional[int]:
+    def _eval_op(self, opcode: OpCode, vals: list[int]) -> int | None:
         """Evaluate p-code op with constant inputs."""
         ops = {
             OpCode.INT_ADD: lambda v: v[0] + v[1],
@@ -219,8 +221,7 @@ class ConstantPropagation(Action):
             OpCode.INT_NEGATE: lambda v: ~v[0],
             OpCode.INT_2COMP: lambda v: -v[0],
             OpCode.COPY: lambda v: v[0],
-            OpCode.INT_SRIGHT: lambda v: (v[0] >> v[1]) if v[0] >= 0
-                                 else (v[0] >> v[1]) | (~0 << (64 - v[1])),
+            OpCode.INT_SRIGHT: lambda v: (v[0] >> v[1]) if v[0] >= 0 else (v[0] >> v[1]) | (~0 << (64 - v[1])),
         }
         fn = ops.get(opcode)
         if fn and len(vals) >= 2:
@@ -237,7 +238,7 @@ class TrivialArithElimination(Action):
     """
 
     def __init__(self):
-        super().__init__('trivial_arith_elim', repeat=True)
+        super().__init__("trivial_arith_elim", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -248,48 +249,42 @@ class TrivialArithElimination(Action):
                 if op.opcode == OpCode.INT_ADD and len(op.inputs) >= 2:
                     if op.inputs[1].is_constant() and op.inputs[1].offset == 0:
                         # Replace with COPY
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [op.inputs[0]], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [op.inputs[0]], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
                 # x - 0 → x
                 if op.opcode == OpCode.INT_SUB and len(op.inputs) >= 2:
                     if op.inputs[1].is_constant() and op.inputs[1].offset == 0:
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [op.inputs[0]], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [op.inputs[0]], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
                 # x * 1 → x
                 if op.opcode == OpCode.INT_MULT and len(op.inputs) >= 2:
                     if op.inputs[1].is_constant() and op.inputs[1].offset == 1:
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [op.inputs[0]], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [op.inputs[0]], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
                 # x & x → x
                 if op.opcode == OpCode.INT_AND and len(op.inputs) >= 2:
                     if op.inputs[0] is op.inputs[1]:
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [op.inputs[0]], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [op.inputs[0]], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
                 # x | x → x
                 if op.opcode == OpCode.INT_OR and len(op.inputs) >= 2:
                     if op.inputs[0] is op.inputs[1]:
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [op.inputs[0]], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [op.inputs[0]], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
                 # x ^ x → 0
                 if op.opcode == OpCode.INT_XOR and len(op.inputs) >= 2:
                     if op.inputs[0] is op.inputs[1]:
-                        new_op = PcodeOp(OpCode.COPY, op.output,
-                                        [Varnode.const(0)], addr=op.addr)
+                        new_op = PcodeOp(OpCode.COPY, op.output, [Varnode.const(0)], addr=op.addr)
                         new_ops.append(new_op)
                         changed = True
                         continue
@@ -307,7 +302,7 @@ class SubvariableReduction(Action):
     """
 
     def __init__(self):
-        super().__init__('subvariable_reduction', repeat=True)
+        super().__init__("subvariable_reduction", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -321,9 +316,9 @@ class SubvariableReduction(Action):
                         inner_a = src.def_op.inputs[1].offset if len(src.def_op.inputs) >= 2 else 0
                         outer_b = op.inputs[1].offset if len(op.inputs) >= 2 else 0
                         total = inner_a + outer_b
-                        new_op = PcodeOp(OpCode.SUBPIECE, op.output,
-                                        [src.def_op.inputs[0],
-                                         Varnode.const(total)], addr=op.addr)
+                        new_op = PcodeOp(
+                            OpCode.SUBPIECE, op.output, [src.def_op.inputs[0], Varnode.const(total)], addr=op.addr
+                        )
                         new_ops.append(new_op)
                         changed = True
                         continue
@@ -336,6 +331,7 @@ class SubvariableReduction(Action):
 # Phase 2: Control Flow Cleanup
 # ══════════════════════════════════════════════════════════════════════
 
+
 class UnreachableBlockElimination(Action):
     """Remove blocks not reachable from the entry point.
 
@@ -343,11 +339,11 @@ class UnreachableBlockElimination(Action):
     """
 
     def __init__(self):
-        super().__init__('unreachable_block_elim', repeat=True)
+        super().__init__("unreachable_block_elim", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
         # Mark reachable from entry
-        reachable: Set[BasicBlock] = set()
+        reachable: set[BasicBlock] = set()
         work = [ctx.graph.entry] if ctx.graph.entry else []
 
         while work:
@@ -375,7 +371,7 @@ class BlockMerge(Action):
     """
 
     def __init__(self):
-        super().__init__('block_merge', repeat=True)
+        super().__init__("block_merge", repeat=True)
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -403,6 +399,7 @@ class BlockMerge(Action):
 # Phase 3: Type Recovery (stub)
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TypeRecovery(Action):
     """Incremental type inference through the SSA graph.
 
@@ -413,11 +410,11 @@ class TypeRecovery(Action):
     - Call conventions (function signatures)
     """
 
-    SIMPLE_TYPES = {1: 'char', 2: 'short', 4: 'int', 8: 'long'}
+    SIMPLE_TYPES = {1: "char", 2: "short", 4: "int", 8: "long"}
 
     def __init__(self):
-        super().__init__('type_recovery', repeat=False)
-        self.types: Dict[str, str] = {}  # varname → type string
+        super().__init__("type_recovery", repeat=False)
+        self.types: dict[str, str] = {}  # varname → type string
 
     def apply(self, ctx: SSAContext) -> bool:
         changed = False
@@ -430,14 +427,14 @@ class TypeRecovery(Action):
                     continue
 
                 # Basic type from size
-                t = self.SIMPLE_TYPES.get(op.output.size, f'uint{op.output.size * 8}_t')
+                t = self.SIMPLE_TYPES.get(op.output.size, f"uint{op.output.size * 8}_t")
                 self.types[varname] = t
                 changed = True
 
                 # PTRADD → pointer type
                 if op.opcode == OpCode.PTRADD and op.inputs:
-                    pointee_type = self.types.get(_varname_key(op.inputs[0]), 'int')
-                    self.types[varname] = f'{pointee_type}*'
+                    pointee_type = self.types.get(_varname_key(op.inputs[0]), "int")
+                    self.types[varname] = f"{pointee_type}*"
                     changed = True
 
                 # LOAD result → pointer element
@@ -455,28 +452,38 @@ class TypeRecovery(Action):
 
 # ── Default Pipeline Builder ──────────────────────────────────────────
 
+
 def default_pipeline() -> ActionPipeline:
     """Create the default decompiler action pipeline."""
     pipeline = ActionPipeline()
 
     # Phase 1: First-pass simplification
-    pipeline.add_phase('simplify', [
-        DeadCodeElimination(),
-        CopyPropagation(),
-        TrivialArithElimination(),
-        ConstantPropagation(),
-        SubvariableReduction(),
-    ])
+    pipeline.add_phase(
+        "simplify",
+        [
+            DeadCodeElimination(),
+            CopyPropagation(),
+            TrivialArithElimination(),
+            ConstantPropagation(),
+            SubvariableReduction(),
+        ],
+    )
 
     # Phase 2: Control flow cleanup
-    pipeline.add_phase('cf_cleanup', [
-        UnreachableBlockElimination(),
-        BlockMerge(),
-    ])
+    pipeline.add_phase(
+        "cf_cleanup",
+        [
+            UnreachableBlockElimination(),
+            BlockMerge(),
+        ],
+    )
 
     # Phase 3: Type recovery
-    pipeline.add_phase('type_recovery', [
-        TypeRecovery(),
-    ])
+    pipeline.add_phase(
+        "type_recovery",
+        [
+            TypeRecovery(),
+        ],
+    )
 
     return pipeline
