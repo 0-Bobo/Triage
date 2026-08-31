@@ -1,0 +1,47 @@
+# Triage — Web Edition (main.py / python -m triage_web)
+# Works on Windows, Linux, and macOS.
+#
+# Install into a venv and run the server with that SAME interpreter — the
+# Solvers tab shells out to sys.executable, so angr/z3 must live where the
+# server runs:
+#     py -m venv .venv
+#     .venv\Scripts\python -m pip install -r requirements-web.txt
+#     .venv\Scripts\python main.py <binary>
+
+# ── Required ──────────────────────────────────────────────────────────
+fastapi>=0.110
+uvicorn>=0.27
+python-multipart>=0.0.9      # FastAPI form/file upload parsing
+capstone>=5.0                # disassembly engine (hard requirement)
+
+# ── Binary parsing (install at least one; both recommended) ───────────
+pyelftools>=0.29             # ELF
+pefile>=2023.2.7             # PE
+
+# ── Optional analysis features ───────────────────────────────────────
+lief>=0.14                   # richer ELF/PE parsing, extra protections
+keystone-engine>=0.9.2       # assembler (patch/keypatch helpers)
+z3-solver>=4.12              # constraint solving; angr_* solver scripts
+angr>=9.2                    # symbolic execution solver scripts (heavy)
+unicorn>=2.0                 # CPU emulation; unicorn_emulate_func solver
+flare-capa>=7.0              # /api/capa capability detection endpoint
+r2pipe>=1.7                  # radare2 bridge (needs the radare2 binary on PATH)
+
+# Triton (concolic / taint / deobfuscation) — a Windows wheel exists but
+# only as a pre-release, so it needs --pre:
+#   pip install --pre triton-library      # drives the triton_solve_flag solver
+
+# pwntools 4.15+ installs and imports on native Windows (pip install pwntools).
+#   Works natively: p64/u64/flat, cyclic, ELF/ROP, fmtstr_payload, remote(host,port).
+#   asm() + shellcraft: need GNU `as` on PATH. Installed here via
+#     winget install BrechtSanders.WinLibs.POSIX.UCRT   (adds mingw64\bin to PATH;
+#     open a fresh terminal so the Triage server inherits it). Verified: asm() works.
+#   disasm(): WinLibs' objcopy rejects pwntools' flags — use the Disasm tab
+#     (capstone) or WSL for that.
+#   process('./elf'): running a Linux target locally needs WSL.
+#
+# WSL (Ubuntu 24.04 here) is the full exploit env — binutils 2.42 preinstalled.
+#   Set up once:  python3 -m venv ~/pwn-venv && ~/pwn-venv/bin/pip install pwntools
+#   Everything works there: asm/disasm/shellcraft (all arches with the matching
+#   binutils-<arch>-linux-gnu), gdb.debug(), process('./chall'). WSL2 shares
+#   localhost, so run Triage on Windows and the exploit scripts in WSL side by side.
