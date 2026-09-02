@@ -283,21 +283,25 @@ def _make_op(opcode: OpCode, out: Varnode | None, *inputs: Varnode, addr: int = 
 
 # ── x86→p-code Translator ─────────────────────────────────────────────
 
+# Mnemonic → (comparison OpCode, swap_operands).  Intel `cmp X, Y` sets flags
+# as X - Y, so operand-reversed jumps (jg/jge/ja/jae) carry swap=True and the
+# predicate is synthesized over (Y, X).  Single-flag jumps (js/jns/jo/jno,
+# jp/jnp) have no clean two-operand relational form and are deliberately absent
+# — they route through the widened dispatch guard to the honest `eflags`
+# fallback in _translate_cond_jump.
 _X86_COND_MAP = {
-    "je": OpCode.INT_EQUAL,
-    "jne": OpCode.INT_NOTEQUAL,
-    "jl": OpCode.INT_SLESS,
-    "jge": OpCode.INT_SLESSEQUAL,  # reversed sense
-    "jg": OpCode.INT_SLESS,  # reversed operands
-    "jle": OpCode.INT_SLESSEQUAL,
-    "jb": OpCode.INT_LESS,
-    "jae": OpCode.INT_LESSEQUAL,
-    "ja": OpCode.INT_LESS,  # reversed operands
-    "jbe": OpCode.INT_LESSEQUAL,
-    "js": OpCode.INT_SLESS,  # sign test
-    "jns": OpCode.INT_SLESS,  # not sign test
-    "jo": OpCode.INT_EQUAL,  # overflow
-    "jno": OpCode.INT_NOTEQUAL,
+    "je": (OpCode.INT_EQUAL, False),
+    "jz": (OpCode.INT_EQUAL, False),
+    "jne": (OpCode.INT_NOTEQUAL, False),
+    "jnz": (OpCode.INT_NOTEQUAL, False),
+    "jl": (OpCode.INT_SLESS, False),
+    "jge": (OpCode.INT_SLESSEQUAL, True),
+    "jg": (OpCode.INT_SLESS, True),
+    "jle": (OpCode.INT_SLESSEQUAL, False),
+    "jb": (OpCode.INT_LESS, False),
+    "jae": (OpCode.INT_LESSEQUAL, True),
+    "ja": (OpCode.INT_LESS, True),
+    "jbe": (OpCode.INT_LESSEQUAL, False),
 }
 
 
@@ -344,10 +348,15 @@ class Translator:
         self._no_output = {"push", "stosb", "stosd", "stosq", "repne_scasb", "rep_stosb", "ret", "nop"}
         # Instructions that modify memory (output is implicit via STORE)
         self._mem_ops = {"stosb", "stosd", "stosq"}
+        # Most recent flag-setting instruction, as
+        # ("cmp"|"test", operand_a_varnode, operand_b_varnode_or_None).
+        # Consumed by _translate_cond_jump to synthesize the real predicate.
+        self._last_flags: tuple | None = None
 
     def translate(self, capstone_insns: list, loader=None, base_addr: int = 0) -> list[PcodeOp]:
         """Translate a list of Capstone instructions to p-code."""
         pcode_ops = []
+        self._last_flags = None
         # Pre-pass: map all target addresses from branches for assignment
         targets = self._collect_targets(capstone_insns, base_addr)
 
@@ -423,8 +432,11 @@ class Translator:
         if base_mnem == "jmp":
             return self._translate_jump(insn, op_str, addr, targets)
 
-        # CONDITIONAL JUMPS → CBRANCH
-        if base_mnem.startswith("j") and base_mnem in _X86_COND_MAP:
+        # CONDITIONAL JUMPS → CBRANCH.  Every j-prefixed mnemonic except the
+        # unconditional `jmp` (handled above) routes here, so mnemonics absent
+        # from _X86_COND_MAP reach the eflags fallback instead of being dropped
+        # by the `return []` at the end of this method.
+        if base_mnem.startswith("j") and base_mnem != "jmp":
             return self._translate_cond_jump(insn, base_mnem, op_str, addr, targets)
 
         # RETURN
@@ -600,13 +612,42 @@ class Translator:
         return ops
 
     def _translate_cond_jump(self, insn: dict, mnem: str, op_str: str, addr: int, targets: set) -> list[PcodeOp]:
+        # CBRANCH takes (condition, target_addr) as inputs.  A malformed
+        # target address is the only reason to skip — never skip based on the
+        # mnemonic (keeps the T-01-01 guarded-parsing mitigation true).
+        try:
+            target_addr = int(op_str, 16) if op_str.startswith("0x") else int(op_str)
+        except (ValueError, AttributeError):
+            return []
         ops = []
-        # CBRANCH takes (condition, target_addr) as inputs
-        target_addr = int(op_str, 16) if op_str.startswith("0x") else int(op_str)
-        # TODO: derive the real condition from an eflags varnode (as Ghidra does)
-        # and select the comparison opcode via _X86_COND_MAP[mnem].
-        cond_vn = Varnode.const(1, 8)  # placeholder condition
-        # Emit the CBRANCH with target address constant as input
+
+        map_entry = _X86_COND_MAP.get(mnem)
+        # size-1 boolean, distinct UNIQUE offset from the cmp/test temp
+        cond_vn = Varnode(UNIQUE, ((addr & 0xFFFF) | 0x10000), 1)
+        if self._last_flags is not None and map_entry is not None:
+            # Ghidra "condition marker" shortcut: synthesize the single
+            # comparison op the mnemonic implies over the remembered
+            # flag-source operands.
+            cmp_op, swap = map_entry
+            kind, a, b = self._last_flags
+            if kind == "test":
+                # `test X, Y` only sets a clean ZF; equality jumps compare the
+                # AND result against zero, anything else has no two-operand form.
+                if mnem in ("je", "jz"):
+                    ops.append(PcodeOp(OpCode.INT_EQUAL, cond_vn, [a, Varnode.const(0)], addr=addr))
+                elif mnem in ("jne", "jnz"):
+                    ops.append(PcodeOp(OpCode.INT_NOTEQUAL, cond_vn, [a, Varnode.const(0)], addr=addr))
+                else:
+                    cond_vn = self._varnode_for_reg("eflags")
+            else:
+                lhs, rhs = (b, a) if swap else (a, b)
+                ops.append(PcodeOp(cmp_op, cond_vn, [lhs, rhs], addr=addr))
+        else:
+            # Single-flag jumps (js/jns/jo/jno, jp/jnp) and jumps with no
+            # preceding compare intentionally route here: an honest,
+            # non-constant eflags condition rather than a synthesized predicate.
+            cond_vn = self._varnode_for_reg("eflags")
+
         ops.append(PcodeOp(OpCode.CBRANCH, None, [cond_vn, Varnode.const(target_addr, 8)], addr=addr))
         return ops
 
@@ -663,62 +704,42 @@ class Translator:
 
     def _translate_cmp(self, insn: dict, op_str: str, addr: int) -> list[PcodeOp]:
         parts = op_str.split(",", 1)
+        a = b = None
         if len(parts) == 2:
             src_op = self._parse_operand(parts[0].strip())
             dst_op = self._parse_operand(parts[1].strip())
             if src_op[0] == "reg" and dst_op[0] == "reg":
-                return [
-                    PcodeOp(
-                        OpCode.INT_SUB,
-                        Varnode(UNIQUE, addr & 0xFFFF, 4),
-                        [self._varnode_for_reg(src_op[1]), self._varnode_for_reg(dst_op[1])],
-                        addr=addr,
-                    )
-                ]
-            if src_op[0] == "reg" and dst_op[0] == "imm":
-                return [
-                    PcodeOp(
-                        OpCode.INT_SUB,
-                        Varnode(UNIQUE, addr & 0xFFFF, 4),
-                        [self._varnode_for_reg(src_op[1]), Varnode.const(dst_op[1])],
-                        addr=addr,
-                    )
-                ]
-            if src_op[0] == "imm" and dst_op[0] == "reg":
-                return [
-                    PcodeOp(
-                        OpCode.INT_SUB,
-                        Varnode(UNIQUE, addr & 0xFFFF, 4),
-                        [Varnode.const(src_op[1]), self._varnode_for_reg(dst_op[1])],
-                        addr=addr,
-                    )
-                ]
-        return [PcodeOp(OpCode.INT_SUB, addr=addr)]
+                a, b = self._varnode_for_reg(src_op[1]), self._varnode_for_reg(dst_op[1])
+            elif src_op[0] == "reg" and dst_op[0] == "imm":
+                a, b = self._varnode_for_reg(src_op[1]), Varnode.const(dst_op[1])
+            elif src_op[0] == "imm" and dst_op[0] == "reg":
+                a, b = Varnode.const(src_op[1]), self._varnode_for_reg(dst_op[1])
+        if a is None or b is None:
+            self._last_flags = None
+            return [PcodeOp(OpCode.INT_SUB, addr=addr)]
+        # Intel `cmp X, Y` computes X - Y; remember (X, Y) so the next
+        # conditional jump can synthesize its real predicate over them.
+        self._last_flags = ("cmp", a, b)
+        return [PcodeOp(OpCode.INT_SUB, Varnode(UNIQUE, addr & 0xFFFF, 4), [a, b], addr=addr)]
 
     def _translate_test(self, insn: dict, op_str: str, addr: int) -> list[PcodeOp]:
         parts = op_str.split(",", 1)
+        a = b = None
         if len(parts) == 2:
             src_op = self._parse_operand(parts[0].strip())
             dst_op = self._parse_operand(parts[1].strip())
             if src_op[0] == "reg" and dst_op[0] == "reg":
-                return [
-                    PcodeOp(
-                        OpCode.INT_AND,
-                        Varnode(UNIQUE, addr & 0xFFFF, 4),
-                        [self._varnode_for_reg(src_op[1]), self._varnode_for_reg(dst_op[1])],
-                        addr=addr,
-                    )
-                ]
-            if src_op[0] == "reg" and dst_op[0] == "imm":
-                return [
-                    PcodeOp(
-                        OpCode.INT_AND,
-                        Varnode(UNIQUE, addr & 0xFFFF, 4),
-                        [self._varnode_for_reg(src_op[1]), Varnode.const(dst_op[1])],
-                        addr=addr,
-                    )
-                ]
-        return [PcodeOp(OpCode.INT_AND, addr=addr)]
+                a, b = self._varnode_for_reg(src_op[1]), self._varnode_for_reg(dst_op[1])
+            elif src_op[0] == "reg" and dst_op[0] == "imm":
+                a, b = self._varnode_for_reg(src_op[1]), Varnode.const(dst_op[1])
+        if a is None or b is None:
+            self._last_flags = None
+            return [PcodeOp(OpCode.INT_AND, addr=addr)]
+        # `test X, Y` sets ZF from X & Y; remember the AND-result temp so a
+        # following je/jne can test it against zero.
+        out_vn = Varnode(UNIQUE, addr & 0xFFFF, 4)
+        self._last_flags = ("test", out_vn, None)
+        return [PcodeOp(OpCode.INT_AND, out_vn, [a, b], addr=addr)]
 
     def _translate_lea(self, insn: dict, op_str: str, addr: int) -> list[PcodeOp]:
         # LEA dest, [base+index*scale+disp] → PTRADD base, index, scale
