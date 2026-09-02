@@ -75,3 +75,7 @@ venv.bak/
 
 # Cython debug symbols
 cython_debug/
+/Binaries/
+
+# user notes vault (not part of the tool)
+/Writeups/

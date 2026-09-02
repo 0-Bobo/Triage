@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 from triage_web.analysis import (
     VULN_BOF,
@@ -90,6 +90,16 @@ _session = Session()
 
 def _get_loader() -> BinaryLoader:
     return _session.require_loader()
+
+
+def _size_to_next_function(loader: BinaryLoader, addr: int) -> int:
+    """Byte span from ``addr`` to the next function boundary, capped at 256."""
+    next_addr = addr + 256
+    for _name, a2 in loader.get_functions():
+        if a2 > addr:
+            next_addr = min(next_addr, a2)
+            break
+    return next_addr - addr
 
 
 # ── Health / Shutdown ─────────────────────────────────────────────────
@@ -379,12 +389,7 @@ def api_disasm_function(vaddr: str = "0x0", size: int = 0):
 
     # Auto-size to next function boundary if size not given
     if not size or size < 1:
-        next_addr = addr + 256
-        for _name, a2 in loader.get_functions():
-            if a2 > addr:
-                next_addr = min(next_addr, a2)
-                break
-        size = next_addr - addr
+        size = _size_to_next_function(loader, addr)
 
     data = loader.read_vaddr(addr, size)
     if not data:
@@ -402,12 +407,7 @@ def api_disasm_variables(vaddr: str = "0x0", size: int = 0):
     known_calls = build_known_calls(loader)
 
     if not size or size < 1:
-        next_addr = addr + 256
-        for _name, a2 in loader.get_functions():
-            if a2 > addr:
-                next_addr = min(next_addr, a2)
-                break
-        size = next_addr - addr
+        size = _size_to_next_function(loader, addr)
 
     data = loader.read_vaddr(addr, size)
     if not data:
@@ -423,7 +423,7 @@ def api_disasm_variables(vaddr: str = "0x0", size: int = 0):
 
 @app.get("/api/disasm/decompile")
 def api_disasm_decompile(vaddr: str = "0x0"):
-    """GET /api/disasm/decompile?addr=0x...
+    """GET /api/disasm/decompile?vaddr=0x...
     Returns pseudo-C decompilation of the function at the given address."""
     loader = _get_loader()
     disasm = _session.require_disasm()
@@ -996,6 +996,95 @@ def api_exploit_techniques():
             t_copy["nx_status"] = "disabled"
         techniques.append(t_copy)
     return {"techniques": techniques, "count": len(techniques)}
+
+
+# ── Automated solver (autopwn) ──────────────────────────────────────
+
+
+@app.get("/api/autopwn/recon")
+def api_autopwn_recon(use_capa: bool = False):
+    """Classify the loaded binary and rank the solver strategies."""
+    _get_loader()  # 400 if nothing loaded
+    from triage_web.autopwn import recon
+
+    return recon(_session.path, use_capa=use_capa)
+
+
+@app.post("/api/autopwn")
+def api_autopwn(
+    strategies: str | None = None,
+    budget_s: float = 150.0,
+    flag_pattern: str | None = None,
+    use_capa: bool = False,
+):
+    """Run the automated solver against the loaded binary and return the
+    flag plus every strategy attempt (each with its generated script)."""
+    _get_loader()
+    from triage_web.autopwn import solve
+
+    only = [s.strip() for s in strategies.split(",")] if strategies else None
+    budget = max(10.0, min(float(budget_s), 600.0))
+    result = solve(_session.path, only=only, budget_s=budget, flag_pattern=flag_pattern, use_capa=use_capa)
+    return {
+        "path": result.path,
+        "success": result.success,
+        "flag": result.flag,
+        "strategy": result.strategy,
+        "seconds": result.seconds,
+        "plans": result.plans,
+        "attempts": result.attempts,
+        "proof": result.proof,
+        "notes": result.notes,
+        "recon": result.recon,
+    }
+
+
+@app.get("/api/autopwn/stream")
+def api_autopwn_stream(
+    strategies: str | None = None,
+    budget_s: float = 150.0,
+    flag_pattern: str | None = None,
+    use_capa: bool = False,
+):
+    """Same as ``POST /api/autopwn`` but streams progress as Server-Sent
+    Events (``recon`` → ``plan`` → ``strategy_start``/``strategy_done`` … →
+    ``done``) so the UI can show what the solver is doing while it runs."""
+    import json
+    import queue
+    import threading
+
+    from triage_web.autopwn import solve
+
+    _get_loader()
+    path = _session.path
+    only = [s.strip() for s in strategies.split(",")] if strategies else None
+    budget = max(10.0, min(float(budget_s), 600.0))
+
+    events: queue.Queue = queue.Queue()
+    _DONE = object()
+
+    def _run():
+        try:
+            solve(path, only=only, budget_s=budget, flag_pattern=flag_pattern, use_capa=use_capa, on_event=events.put)
+        except Exception as exc:  # never wedge the stream on an orchestrator bug
+            events.put({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
+        finally:
+            events.put(_DONE)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    def _sse():
+        while True:
+            ev = events.get()
+            if ev is _DONE:
+                break
+            yield f"data: {json.dumps(ev)}\n\n"
+
+    return StreamingResponse(
+        _sse(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Frontend ──────────────────────────────────────────────────────────

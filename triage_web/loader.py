@@ -106,8 +106,17 @@ class BinaryLoader:
                     "EM_386": "x86",
                     "EM_ARM": "ARM",
                     "EM_AARCH64": "AArch64",
+                    "EM_SPARC": "SPARC",
+                    "EM_SPARC32PLUS": "SPARC",
+                    "EM_SPARCV9": "SPARC64",
+                    "EM_MIPS": "MIPS",
+                    "EM_PPC": "PPC",
+                    "EM_PPC64": "PPC64",
+                    "EM_RISCV": "RISC-V",
                 }
-                self.arch = machine_map.get(self._elf.header["e_machine"], "x86_64")
+                machine = self._elf.header["e_machine"]
+                # honest fallback for anything unmapped — never silently claim x86
+                self.arch = machine_map.get(machine, str(machine).removeprefix("EM_").lower() or "unknown")
             except Exception as e:
                 log.debug("pyelftools parse failed: %s", e)
 

@@ -1,0 +1,8 @@
+{
+  "format": "ELF", "arch": "x86_64", "bits": 64,
+  "protections": {
+    "NX (No-Execute)": "Enabled", "PIE (ASLR)": "Enabled", "RELRO": "Full",
+    "Stack Canary": "Disabled", "Fortify Source": "Disabled", "RWX Segments": "No"
+  },
+  "plan": ["emulate", "ret2win", "format_string"]
+}

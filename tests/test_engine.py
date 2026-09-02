@@ -1715,5 +1715,43 @@ class TestDecompileCallAndJumpForms(unittest.TestCase):
         self.assertIn('puts("hello")', code)
 
 
+class TestSkipJunkDisasm(unittest.TestCase):
+    """`disassemble(skip_junk=True)` defeats `eb 01` + junk anti-disassembly."""
+
+    # 0: 48 31 c0        xor rax, rax
+    # 3: eb 01           jmp 0x6      (over the junk byte at 5)
+    # 5: e8              <junk - would start a 5-byte call and desync a linear sweep>
+    # 6: 48 ff c0        inc rax
+    # 9: c3              ret
+    CODE = bytes.fromhex("4831c0") + bytes.fromhex("eb01") + b"\xe8" + bytes.fromhex("48ffc0") + b"\xc3"
+
+    def test_linear_sweep_desyncs_on_the_junk_byte(self):
+        d = Disassembler()
+        mnems = [i["mnemonic"] for i in d.disassemble(self.CODE, 0)]
+        self.assertEqual(mnems[:2], ["xor", "jmp"])
+        self.assertIn("call", mnems)  # swallowed the junk 0xe8 and following bytes
+
+    def test_skip_junk_recovers_the_real_instructions(self):
+        d = Disassembler()
+        rows = d.disassemble(self.CODE, 0, skip_junk=True)
+        mnems = [i["mnemonic"] for i in rows]
+        self.assertEqual(mnems, ["xor", "jmp", "inc", "ret"])
+        self.assertEqual(rows[2]["address"], 6)  # resumed at the jump target, not byte 5
+
+    def test_skip_junk_honours_max_insns(self):
+        d = Disassembler()
+        rows = d.disassemble(self.CODE, 0, max_insns=2, skip_junk=True)
+        self.assertEqual(len(rows), 2)
+        # cap reached mid-stream (no short-jump break on the way): still stops at 2
+        plain = bytes.fromhex("48ffc0") * 5 + b"\xc3"
+        self.assertEqual(len(d.disassemble(plain, 0, max_insns=2, skip_junk=True)), 2)
+
+    def test_skip_junk_steps_over_undecodable_bytes(self):
+        d = Disassembler()
+        # trailing lone 0x0f cannot be decoded — the sweep must step past it, not hang
+        rows = d.disassemble(bytes.fromhex("48ffc0") + b"\xc3\x0f", 0, skip_junk=True)
+        self.assertEqual([i["mnemonic"] for i in rows], ["inc", "ret"])
+
+
 if __name__ == "__main__":
     unittest.main()

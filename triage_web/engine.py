@@ -296,7 +296,9 @@ class Disassembler:
         self.md = Cs(*arch_mode)
         self.md.detail = True
 
-    def disassemble(self, code: bytes, base: int, max_insns=0) -> list[dict]:
+    def disassemble(self, code: bytes, base: int, max_insns=0, skip_junk=False) -> list[dict]:
+        if skip_junk:
+            return self._disassemble_skip_junk(code, base, max_insns)
         insns = []
         for i in self.md.disasm(code, base):
             insns.append(
@@ -308,6 +310,51 @@ class Disassembler:
                     "bytes": i.bytes.hex(),
                 }
             )
+            if max_insns and len(insns) >= max_insns:
+                break
+        return insns
+
+    # ``eb 01`` / ``74 01`` / ``75 01`` + one junk byte is the classic
+    # anti-disassembly trick (see docs/oracle-analysis.md): a real short
+    # jump/branch whose target lands 1 byte past the following instruction,
+    # so a linear sweep decodes the junk byte and desyncs. When the jump is
+    # unconditional (``eb``) the junk is dead; when conditional we still take
+    # the fall-through past the junk — good enough to recover a listing.
+    _SHORT_JCC = frozenset(range(0x70, 0x80)) | {0xEB}
+
+    def _row(self, i) -> dict:
+        return {
+            "address": i.address,
+            "size": i.size,
+            "mnemonic": i.mnemonic,
+            "op_str": i.op_str,
+            "bytes": i.bytes.hex(),
+        }
+
+    def _disassemble_skip_junk(self, code: bytes, base: int, max_insns: int) -> list[dict]:
+        insns: list[dict] = []
+        pos = 0
+        n = len(code)
+        while pos < n:
+            emitted = False
+            for i in self.md.disasm(code[pos:], base + pos):
+                rel = i.address - base
+                nxt = rel + i.size
+                insns.append(self._row(i))
+                emitted = True
+                if (
+                    i.size == 2
+                    and code[rel] in self._SHORT_JCC
+                    and 1 <= code[rel + 1] <= 6
+                    and nxt + code[rel + 1] <= n
+                ):
+                    pos = nxt + code[rel + 1]  # jump over the junk to the real target
+                    break
+                pos = nxt
+                if max_insns and len(insns) >= max_insns:
+                    return insns
+            if not emitted:
+                pos += 1  # undecodable byte — step over it and resync
             if max_insns and len(insns) >= max_insns:
                 break
         return insns

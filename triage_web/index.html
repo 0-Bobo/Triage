@@ -4,81 +4,116 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Triage — Binary Analysis Workbench</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ============================================================
+   Direction: industrial / instrument readout.
+   One monospace family throughout. Charcoal greyscale, a single
+   amber signal accent, semantic status colours. Borders, never
+   shadows. Sharp corners. Motion only where it carries meaning.
+   ============================================================ */
 :root {
-  --bg: #2b2b2b; --mantle: #333333; --surface: #3c3c3c; --surface-hover: #454545;
-  --border: #555555; --border-bright: #666666;
-  --text: #e0e0e0; --text-dim: #aaaaaa; --text-muted: #888888;
-  --cyan: #6897bb; --cyan-dim: #4a7aaa; --blue: #6897bb; --violet: #9876aa;
-  --green: #6a8759; --orange: #cc7832; --red: #ff6b68; --yellow: #bbb529;
-  --sidebar-w: 52px; --titlebar-h: 36px;
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --bg: #15161a; --bg2: #101116; --mantle: #191a1f; --surface: #202127; --surface-hover: #292b33;
+  --border: #30323a; --border-bright: #444650;
+  --text: #d6d8de; --text-dim: #9296a0; --text-muted: #63666f;
+  /* one functional accent + status colours that mean something */
+  --accent: #e0932f; --accent-dim: #b9761f; --accent-soft: rgba(224,147,47,.14);
+  --cyan: #6aa0c8; --cyan-dim: #4d7d9f; --blue: #6aa0c8; --violet: #9a8fc0;
+  --green: #6fae5b; --orange: #e0932f; --red: #d65f5c; --yellow: #cdb24a;
+  --sidebar-w: 60px; --titlebar-h: 38px; --radius: 2px;
+  --font-mono: "JetBrains Mono", "Berkeley Mono", "Cascadia Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --font-sans: var(--font-mono);
+  --font-display: var(--font-mono);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; -webkit-font-smoothing:antialiased; }
-::selection { background:rgba(103,232,249,.2); }
-::-webkit-scrollbar { width:5px; height:5px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:var(--border-bright); border-radius:3px; }
+html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font-mono); font-size:12.5px; line-height:1.55; font-feature-settings:"liga" 0,"calt" 0; -webkit-font-smoothing:antialiased; }
+::selection { background:var(--accent-soft); color:var(--text); }
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-track { background:var(--bg2); }
+::-webkit-scrollbar-thumb { background:var(--border-bright); border:2px solid var(--bg2); }
 ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+:focus-visible { outline:1px solid var(--accent); outline-offset:1px; }
 
 /* ── Layout ─────────────────────────────────────────────── */
 #app { display:flex; height:100vh; overflow:hidden; }
 
-/* ── Sidebar (Ghidra style) ─────────────────────────────── */
-.sidebar { width:var(--sidebar-w); background:#2b2b2b; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:stretch; padding:4px 0; flex-shrink:0; z-index:10; }
-.sidebar .logo-box { height:32px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:14px; font-weight:700; color:#6897bb; margin-bottom:4px; border-bottom:1px solid var(--border); }
-.sidebar button { position:relative; height:34px; border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:9px; font-weight:500; letter-spacing:.5px; text-transform:uppercase; padding:0 2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; transition:all .1s; border-left:2px solid transparent; }
-.sidebar button .ico { font-size:13px; line-height:1; }
-.sidebar button:hover { color:var(--text); background:#3c3c3c; }
-.sidebar button.active, .sidebar button:active { color:#6897bb; background:#3c3c3c; border-left-color:#6897bb; }
-.sidebar button:focus-visible { outline:1px solid #6897bb; outline-offset:-2px; }
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar { width:var(--sidebar-w); background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:stretch; padding:6px 0; flex-shrink:0; z-index:10; }
+.sidebar .logo-box { height:30px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--accent); margin-bottom:4px; border-bottom:1px solid var(--border); }
+.sidebar button { position:relative; height:42px; border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:8.5px; font-weight:500; letter-spacing:.5px; text-transform:uppercase; padding:0 1px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; transition:color .1s; }
+.sidebar button::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:transparent; }
+.sidebar button .ico { font-size:13px; line-height:1; opacity:.85; }
+.sidebar button:hover { color:var(--text); background:var(--surface); }
+.sidebar button.active { color:var(--accent); background:var(--surface); }
+.sidebar button.active::before { background:var(--accent); }
 .sidebar .spacer { flex:1; }
 .sidebar .sep { height:1px; background:var(--border); margin:4px 10px; }
 
-/* ── Title Bar (Ghidra style) ───────────────────────────── */
+/* ── Title Bar (status readout) ─────────────────────────── */
 .titlebar { display:flex; align-items:center; gap:10px; height:var(--titlebar-h); padding:0 14px; background:var(--mantle); border-bottom:1px solid var(--border); flex-shrink:0; }
-.titlebar .logo { font-family:var(--font-mono); font-weight:700; font-size:13px; color:#6897bb; letter-spacing:0; }
-.titlebar .path { color:var(--text-dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.titlebar .dot { width:6px; height:6px; border-radius:50%; background:var(--text-muted); flex-shrink:0; }
-.titlebar .dot.online { background:#6a8759; box-shadow:0 0 6px rgba(106,135,89,.3); }
+.titlebar .logo { font-weight:700; font-size:13px; color:var(--text); letter-spacing:.5px; }
+.titlebar .path { color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.titlebar .dot { width:7px; height:7px; background:var(--text-muted); flex-shrink:0; transition:background .15s; }
+.titlebar .dot.online { background:var(--green); }
 
 /* ── Content ────────────────────────────────────────────── */
 .content { flex:1; display:flex; flex-direction:column; min-width:0; }
 
-/* ── Panels (Ghidra docked window style) ──────────────────── */
-.panel { display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden; border:1px solid var(--border); margin:4px; border-radius:0; background:var(--mantle); }
+/* ── Panels (framed regions, not floating cards) ────────── */
+.panel { display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden; border:1px solid var(--border); margin:6px; border-radius:var(--radius); background:var(--mantle); }
 .panel.active { display:flex; min-height:0; }
-.panel-enter { animation:panelIn .15s ease-out; }
+.panel-enter { animation:panelIn .09s linear; }
 .panel.code-panel { flex-direction:row; overflow:hidden; }
 .panel.code-panel.active { flex-direction:row; }
-@keyframes panelIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-.panel .panel-title { background:var(--surface); color:var(--text-dim); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; padding:2px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
+/* Pseudo-C listing. Colour via classes, never inline var(--x): the syntax
+   highlighter runs several regex passes and an injected "var(" would be
+   re-matched by the function-call rule, corrupting the markup. */
+.pc-row { display:flex; line-height:18px; }
+.pc-row:nth-child(even) { background:rgba(255,255,255,.015); }
+.pc-ln { width:48px; flex-shrink:0; text-align:right; padding-right:10px; color:var(--text-muted); user-select:none; font-size:9px; }
+.pc-code { flex:1 1 0; min-width:0; text-align:left; white-space:pre; }
+.pc-kw { color:var(--orange); }
+.pc-num { color:var(--cyan); }
+.pc-com { color:var(--green); }
+.pc-fn { color:var(--yellow); font-weight:500; }
+.pc-lbl { color:var(--cyan); font-weight:600; }
+@keyframes panelIn { from { opacity:0; } to { opacity:1; } }
+.panel .panel-title { background:var(--surface); color:var(--text-dim); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; padding:4px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
 
-/* ── Toolbar (Ghidra flat toolbar) ──────────────────────── */
-.tb { display:flex; align-items:center; gap:8px; padding:4px 12px; background:#333333; border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
-.tb .sep { width:1px; height:18px; background:var(--border); flex-shrink:0; }
+/* ── Toolbar ────────────────────────────────────────────── */
+.tb { display:flex; align-items:center; gap:8px; padding:5px 10px; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; flex-wrap:wrap; }
+.tb .sep { width:1px; height:16px; background:var(--border); flex-shrink:0; }
 .tb .v { color:var(--text-dim); font-size:11px; }
 
-/* ── Tabs (Ghidra bottom dock style) ────────────────────── */
-.tab-bar { display:flex; background:#333333; border-bottom:1px solid var(--border); flex-shrink:0; padding:0 8px; }
-.tab { padding:4px 14px; font-size:11px; font-weight:500; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .1s; letter-spacing:.2px; }
-.tab:hover { color:var(--text); background:#3c3c3c; }
-.tab.active { color:#6897bb; border-bottom-color:#6897bb; }
+/* ── Sub-navigation inside a merged panel ──────────────── */
+.subnav { display:flex; gap:0; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; padding:0 6px; }
+.subnav button { background:none; border:0; border-bottom:2px solid transparent; color:var(--text-muted); font-size:11px; font-weight:500; padding:7px 13px; cursor:pointer; letter-spacing:.3px; transition:color .1s; }
+.subnav button:hover { color:var(--text); }
+.subnav button.on { color:var(--accent); border-bottom-color:var(--accent); }
+.subview { display:none; flex:1; min-height:0; overflow:hidden; flex-direction:column; }
+.subview.on { display:flex; }
+
+/* ── Auto-solve panel (framed console, no glow) ─────────── */
+#panel-auto .hero { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:28px 26px 20px; max-width:640px; }
+#panel-auto .hero > div:first-child { font-size:12.5px; color:var(--text-dim); line-height:1.6; }
+#panel-auto .bigbtn { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:1px; padding:11px 26px; border-radius:var(--radius); background:var(--accent); color:#140c02; border:1px solid var(--accent); cursor:pointer; transition:background .1s; }
+#panel-auto .bigbtn:hover:not(:disabled) { background:var(--accent-dim); }
+#panel-auto .bigbtn:disabled { opacity:.5; cursor:default; }
+#panel-auto .flagbox { font-size:14px; font-weight:600; background:var(--bg2); border:1px solid var(--green); border-left:3px solid var(--green); color:var(--green); padding:12px 16px; border-radius:var(--radius); word-break:break-all; cursor:pointer; }
+#panel-auto .att { font-size:11px; padding:5px 14px; border-bottom:1px solid var(--border); color:var(--text-dim); display:flex; gap:8px; align-items:baseline; }
+#panel-auto .att .ok { color:var(--green); } #panel-auto .att .no { color:var(--text-muted); } #panel-auto .att .run { color:var(--accent); }
+#panel-auto .att .t { margin-left:auto; color:var(--text-muted); font-size:10px; flex-shrink:0; }
+#panel-auto .att .msg { color:var(--text-muted); }
 
 /* ── Tables (Ghidra Listing style) ──────────────────────── */
 .dtable { width:100%; border-collapse:collapse; font-size:12px; font-family:var(--font-mono); }
 .dtable th { background:var(--surface); color:var(--text-dim); padding:3px 10px; text-align:left; font-weight:600; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; white-space:nowrap; font-size:9px; text-transform:uppercase; letter-spacing:.8px; }
 .dtable td { padding:2px 10px; border-bottom:1px solid var(--border); white-space:nowrap; line-height:18px; }
-.dtable tr:nth-child(even) td { background:rgba(255,255,255,.015); }
-.dtable tr:hover td { background:rgba(255,255,255,.04); }
-.dtable .addr { color:#6897bb; cursor:pointer; text-align:right; padding-right:12px; }
+.dtable tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+.dtable tr:hover td { background:var(--surface-hover); }
+.dtable .addr { color:var(--cyan); cursor:pointer; text-align:right; padding-right:12px; }
 .dtable .addr:hover { text-decoration:underline; }
 .dtable .mnem { font-weight:600; }
-.dtable .bytes { color:#6a8759; font-size:11px; }
+.dtable .bytes { color:var(--green); font-size:11px; }
 .dtable tr.cursor { cursor:pointer; }
 .scroll { overflow-y:auto; overflow-x:auto; flex:1; min-height:0; }
 
@@ -87,63 +122,62 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 .hx { display:flex; flex-direction:column; height:100%; font-family:var(--font-mono); }
 .hx-grid { flex:1; overflow:auto; padding:6px 12px; outline:none; font-size:12px; line-height:18px; }
 .hx-row { display:flex; white-space:pre; }
-.hx-off { color:#6897bb; padding-right:16px; user-select:none; flex-shrink:0; }
-.hx-b { padding:0 3px; border-radius:2px; color:#a9b7c6; }
-.hx-b.z { color:#5c5c5c; }
-.hx-b.np { color:#cc7832; }
+.hx-off { color:var(--cyan); padding-right:16px; user-select:none; flex-shrink:0; }
+.hx-b { padding:0 3px; color:var(--text); }
+.hx-b.z { color:var(--text-muted); }
+.hx-b.np { color:var(--orange); }
 .hx-gap { display:inline-block; width:8px; }
 .hx-asc { padding-left:16px; flex-shrink:0; color:var(--text-muted); }
-.hx-c.np { color:#5c5c5c; }
-.hx-b.hl,.hx-c.hl { background:#2f4d7a; color:#fff; }
-.hx-b.sel,.hx-c.sel { background:#3a5a9c; color:#fff; }
-.hx-b.mch,.hx-c.mch { background:#5a4a1e; color:#ffd479; }
+.hx-c.np { color:var(--text-muted); }
+.hx-b.hl,.hx-c.hl { background:var(--surface-hover); color:var(--text); }
+.hx-b.sel,.hx-c.sel { background:var(--cyan-dim); color:#fff; }
+.hx-b.mch,.hx-c.mch { background:var(--accent-soft); color:var(--accent); }
 .hx-bar { flex-shrink:0; border-top:1px solid var(--border); padding:4px 12px; font-size:11px;
           color:var(--text-dim); display:flex; gap:18px; white-space:nowrap; overflow-x:auto; }
 .hx-bar b { color:var(--text); font-weight:500; }
 .hx-tb input.mono { font-family:var(--font-mono); }
 .hx-tb select.btn { padding:2px 4px; }
 
-/* ── Buttons (Ghidra flat style) ────────────────────────── */
-.btn { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:3px 10px; border-radius:0; cursor:pointer; font-size:11px; font-family:var(--font-sans); font-weight:500; transition:all .1s; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
-.btn:hover { background:var(--surface-hover); border-color:var(--border-bright); }
-.btn-primary { background:#3c3c3c; border-color:#6897bb; color:#6897bb; }
-.btn-primary:hover { background:#454545; border-color:#6897bb; }
-.btn-danger { background:rgba(255,107,104,.12); border-color:rgba(255,107,104,.25); color:var(--red); }
-.btn-danger:hover { background:rgba(255,107,104,.22); }
-.btn:disabled { opacity:.35; cursor:not-allowed; }
-input,select { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:3px 8px; border-radius:0; font-size:12px; font-family:var(--font-mono); outline:none; transition:border-color .12s; }
-input:focus,select:focus { border-color:#6897bb; }
+/* ── Buttons (flat, bordered, sharp) ────────────────────── */
+.btn { background:var(--surface); border:1px solid var(--border-bright); color:var(--text); padding:5px 11px; border-radius:var(--radius); cursor:pointer; font-size:11px; font-family:var(--font-mono); font-weight:500; transition:background .1s, border-color .1s; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+.btn:hover { background:var(--surface-hover); border-color:var(--text-muted); }
+.btn-primary { background:transparent; border-color:var(--accent); color:var(--accent); }
+.btn-primary:hover { background:var(--accent-soft); border-color:var(--accent); }
+.btn-danger { background:transparent; border-color:var(--red); color:var(--red); }
+.btn-danger:hover { background:rgba(214,95,92,.12); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+input,select { background:var(--bg2); border:1px solid var(--border-bright); color:var(--text); padding:5px 8px; border-radius:var(--radius); font-size:12px; font-family:var(--font-mono); outline:none; transition:border-color .1s; }
+input:focus,select:focus { border-color:var(--accent); }
+input::placeholder { color:var(--text-muted); }
 
 /* ── Badges (Ghidra flat style) ─────────────────────────── */
 .badge { display:inline-flex; align-items:center; padding:1px 6px; border-radius:0; font-size:9px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; gap:3px; }
-.badge-crit { background:rgba(255,107,104,.12); color:#ff6b68; border:1px solid rgba(255,107,104,.2); }
-.badge-high { background:rgba(204,115,50,.1); color:#cc7832; border:1px solid rgba(204,115,50,.18); }
-.badge-med { background:rgba(187,181,41,.1); color:#bbb529; border:1px solid rgba(187,181,41,.18); }
-.badge-low { background:rgba(106,135,89,.1); color:#6a8759; border:1px solid rgba(106,135,89,.18); }
+.badge-crit { background:transparent; color:var(--red); border:1px solid var(--red); }
+.badge-high { background:transparent; color:var(--orange); border:1px solid var(--orange); }
+.badge-med { background:transparent; color:var(--yellow); border:1px solid var(--yellow); }
+.badge-low { background:transparent; color:var(--green); border:1px solid var(--green); }
 
-/* ── Stat cards (Ghidra info panel) ─────────────────────── */
-.stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin-bottom:12px; }
-.stat { background:#3c3c3c; border:1px solid var(--border); padding:10px; display:flex; flex-direction:column; gap:2px; }
-.stat:hover { border-color:var(--border-bright); }
-.stat .lbl { color:var(--text-dim); font-size:9px; text-transform:uppercase; letter-spacing:.8px; font-weight:600; }
-.stat .val { font-size:20px; font-weight:700; font-family:var(--font-mono); letter-spacing:-.5px; }
+/* ── Stat cells (spec-sheet) ────────────────────────────── */
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); margin-bottom:14px; }
+.stat { background:var(--surface); padding:10px 12px; display:flex; flex-direction:column; gap:2px; }
+.stat .lbl { color:var(--text-muted); font-size:9px; text-transform:uppercase; letter-spacing:1px; font-weight:500; }
+.stat .val { font-size:18px; font-weight:600; letter-spacing:0; }
 
 /* ── Empty state ────────────────────────────────────────── */
-.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:6px; color:var(--text-dim); padding:48px; }
-.empty-state .ico { font-size:36px; opacity:.25; }
-.empty-state .big { font-size:14px; color:var(--text); font-weight:600; }
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:6px; color:var(--text-dim); padding:44px; }
+.empty-state .ico { font-size:32px; opacity:.25; }
+.empty-state .big { font-size:13px; color:var(--text-dim); font-weight:500; }
 .empty-state .sub { font-size:11px; }
 
 /* ── Loading spinner ────────────────────────────────────── */
-.spin { display:inline-block; width:14px; height:14px; border:2px solid var(--border-bright); border-top-color:var(--cyan); border-radius:50%; animation:spin .6s linear infinite; }
+.spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border-bright); border-top-color:var(--accent); animation:spin .7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
-/* ── Toast ──────────────────────────────────────────────── */
-#toast { position:fixed; bottom:16px; right:16px; background:var(--mantle); border:1px solid var(--border); padding:10px 16px; font-size:11px; max-width:380px; z-index:999; display:none; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); backdrop-filter:blur(8px); }
-#toast.show { display:block; animation:toastIn .2s ease-out; border-left:3px solid var(--text-dim); }
+/* ── Toast (the one thing that genuinely floats) ────────── */
+#toast { position:fixed; bottom:14px; right:14px; background:var(--surface); border:1px solid var(--border-bright); border-left:2px solid var(--text-dim); padding:9px 14px; font-size:11.5px; max-width:380px; z-index:999; display:none; border-radius:var(--radius); }
+#toast.show { display:block; }
 #toast.show.error { border-left-color:var(--red); }
 #toast.show.ok { border-left-color:var(--green); }
-@keyframes toastIn { from { opacity:0; transform:translateY(10px) scale(.96); } to { opacity:1; transform:translateY(0) scale(1); } }
 
 /* ── Entropy bar ────────────────────────────────────────── */
 #entropy-bar { display:flex; height:28px; overflow:hidden; border:1px solid var(--border); }
@@ -152,11 +186,11 @@ input:focus,select:focus { border-color:#6897bb; }
 
 /* ── Section tree (Ghidra style) ────────────────────────── */
 .tree { font-size:11px; font-family:var(--font-mono); width:100%; border-collapse:collapse; }
-.tree th { background:#3c3c3c; color:var(--text-dim); padding:3px 10px; text-align:left; font-weight:600; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; font-size:9px; text-transform:uppercase; letter-spacing:.8px; }
+.tree th { background:var(--surface); color:var(--text-dim); padding:3px 10px; text-align:left; font-weight:600; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; font-size:9px; text-transform:uppercase; letter-spacing:.8px; }
 .tree td { padding:2px 10px; border-bottom:1px solid var(--border); line-height:18px; }
-.tree tr:nth-child(even) td { background:rgba(255,255,255,.015); }
-.tree tr:hover td { background:rgba(255,255,255,.04); }
-.tree .sect-name { color:#6897bb; font-weight:500; }
+.tree tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+.tree tr:hover td { background:var(--surface-hover); }
+.tree .sect-name { color:var(--cyan); font-weight:500; }
 
 /* ── Vuln list ──────────────────────────────────────────── */
 .vuln-item { display:flex; align-items:center; gap:10px; padding:6px 10px; border-bottom:1px solid var(--border); }
@@ -166,12 +200,12 @@ input:focus,select:focus { border-color:#6897bb; }
 .vuln-desc { color:var(--text-dim); font-size:11px; }
 .vuln-detail { font-size:11px; line-height:1.5; color:var(--text-dim); padding:4px 10px 4px 28px; border-bottom:1px solid var(--border); }
 .vuln-detail b { color:var(--text); }
-.vuln-fix { color:#6b7681; }
+.vuln-fix { color:var(--text-muted); }
 
 /* ── Status bar (Ghidra style) ──────────────────────────── */
-.statusbar { display:flex; align-items:center; gap:10px; padding:2px 12px; background:#333333; border-top:1px solid var(--border); font-size:10px; color:var(--text-dim); flex-shrink:0; }
-.statusbar .indicator { width:6px; height:6px; border-radius:50%; background:#6a8759; flex-shrink:0; }
-.statusbar .indicator.busy { background:#bbb529; animation:pulse 1s infinite; }
+.statusbar { display:flex; align-items:center; gap:10px; padding:2px 12px; background:var(--surface); border-top:1px solid var(--border); font-size:10px; color:var(--text-dim); flex-shrink:0; }
+.statusbar .indicator { width:6px; height:6px; background:var(--green); flex-shrink:0; }
+.statusbar .indicator.busy { background:var(--yellow); animation:pulse 1s infinite; }
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
 
 /* ── Responsive tweaks ──────────────────────────────────── */
@@ -188,20 +222,17 @@ input:focus,select:focus { border-color:#6897bb; }
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="logo-box">Tg</div>
+    <button data-panel="auto" id="nav-auto"><span class="ico">&#9889;</span><span class="lbl">Auto</span></button>
+    <div class="sep"></div>
     <button class="active" data-panel="info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
     <button data-panel="functions"><span class="ico">&#402;</span><span class="lbl">Funcs</span></button>
-    <button data-panel="code"><span class="ico">{&#160;}</span><span class="lbl">Code</span></button>
-    <button data-panel="disasm"><span class="ico">&#9881;</span><span class="lbl">Asm</span></button>
+    <button data-panel="code"><span class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
+    <button data-panel="disasm"><span class="ico">&#9776;</span><span class="lbl">Asm</span></button>
     <button data-panel="hex"><span class="ico">#</span><span class="lbl">Hex</span></button>
-    <button data-panel="imports"><span class="ico">&larr;</span><span class="lbl">Imps</span></button>
-    <button data-panel="strings"><span class="ico">S</span><span class="lbl">Str</span></button>
-    <button data-panel="sections"><span class="ico">&#9632;</span><span class="lbl">Sec</span></button>
+    <button data-panel="imports"><span class="ico">&larr;</span><span class="lbl">Data</span></button>
     <div class="sep"></div>
-    <button data-panel="vulns"><span class="ico">!</span><span class="lbl">Vuln</span></button>
-    <button data-panel="exploit"><span class="ico">&#9889;</span><span class="lbl">Exp</span></button>
-    <button data-panel="rop"><span class="ico">&#8635;</span><span class="lbl">ROP</span></button>
+    <button data-panel="exploit"><span class="ico">!</span><span class="lbl">Exploit</span></button>
     <button data-panel="capa"><span class="ico">C</span><span class="lbl">CAPA</span></button>
-    <button data-panel="solver"><span class="ico">&#10070;</span><span class="lbl">Solve</span></button>
     <button data-panel="xrefs"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
     <div class="spacer"></div>
     <button onclick="quitServer()"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
@@ -217,9 +248,9 @@ input:focus,select:focus { border-color:#6897bb; }
       <span class="logo">Triage</span>
       <span class="path" id="header-path">— no binary loaded</span>
       <div style="flex:1"></div>
-      <button class="btn" onclick="document.getElementById('file-input').click()">&#x1F4C2; Open</button>
+      <button class="btn" onclick="document.getElementById('file-input').click()">Open</button>
       <input type="file" id="file-input" style="display:none" onchange="handleFile(event)">
-      <button class="btn" onclick="showLoadDialog()">&#x1F4C1; Load</button>
+      <button class="btn" onclick="showLoadDialog()">Load</button>
     </div>
 
     <!-- Panels container -->
@@ -232,8 +263,8 @@ input:focus,select:focus { border-color:#6897bb; }
           <div class="big">Load a binary to begin</div>
           <div class="sub">Upload a file or enter a path on the server</div>
           <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">&#x1F4C2; Upload File</button>
-            <button class="btn" onclick="showLoadDialog()">&#x1F4C1; Enter Path</button>
+            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Upload File</button>
+            <button class="btn" onclick="showLoadDialog()">Enter Path</button>
           </div>
         </div>
         <div id="info-content" style="display:none;overflow:auto;flex:1;padding:14px">
@@ -341,69 +372,99 @@ input:focus,select:focus { border-color:#6897bb; }
         </div>
       </div>
 
-      <!-- ===== Imports/Exports/Symbols ===== -->
-      <div class="panel" id="panel-imports">
-        <div class="tab-bar">
-          <div class="tab active" data-tab="imp">Imports</div>
-          <div class="tab" data-tab="exp">Exports</div>
-          <div class="tab" data-tab="sym">Symbols</div>
-        </div>
-        <div class="tb">
-          <input placeholder="Search..." id="imps-search" oninput="loadImports()" style="width:100%">
-          <span class="v" id="imps-count"></span>
-        </div>
-        <div class="scroll" id="imps-scroll">
-          <table class="dtable" id="imp-tbl"><thead><tr><th>Name</th><th>Library</th><th>Risk</th></tr></thead><tbody id="imp-tbody"></tbody></table>
-          <table class="dtable" id="exp-tbl" style="display:none"><thead><tr><th>Name</th><th>Address</th></tr></thead><tbody id="exp-tbody"></tbody></table>
-          <table class="dtable" id="sym-tbl" style="display:none"><thead><tr><th>Name</th><th>Address</th><th>Type</th><th>Binding</th></tr></thead><tbody id="sym-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ===== Strings ===== -->
-      <div class="panel" id="panel-strings">
-        <div class="tb">
-          <input placeholder="Search strings..." id="str-search" oninput="loadStrings()" style="width:100%">
-          <span class="v" id="str-count"></span>
-        </div>
-        <div class="scroll" id="str-container" style="padding:4px 10px;font-family:var(--font-mono);font-size:11px"></div>
-      </div>
-
-      <!-- ===== Sections ===== -->
-      <div class="panel" id="panel-sections">
-        <div class="scroll" style="padding:4px 0">
-          <table class="tree" id="mem-tree"><thead><tr><th>Name</th><th>VAddr</th><th>Size</th><th>Flags</th><th>Entropy</th></tr></thead><tbody id="mem-tbody"></tbody></table>
-        </div>
-      </div>
-
-      <!-- ===== Vulns ===== -->
-      <div class="panel" id="panel-vulns">
-        <div id="vulns-empty" class="empty-state">
-          <div class="ico" style="color:var(--green)">&#10003;</div>
-          <div class="big">No vulnerable imports detected</div>
-        </div>
-        <div class="scroll" id="vulns-list" style="display:none;padding:4px 0"></div>
-      </div>
-
-      <!-- ===== Exploit ===== -->
-      <div class="panel" id="panel-exploit">
-        <div class="tb">
-          <button class="btn btn-primary" onclick="loadExploitPaths(this)">&#9889; Analyze Paths</button>
-          <span class="v" id="exploit-status">Click to analyze exploit primitives</span>
-        </div>
-        <div class="scroll" style="padding:10px" id="exploit-container"></div>
-      </div>
-
-      <!-- ===== ROP ===== -->
-      <div class="panel" id="panel-rop">
-        <div class="tb">
-          <button class="btn btn-primary" onclick="scanROP()" id="rop-scan-btn">&#8635; Scan</button>
-          <span class="v" id="rop-status">Not scanned</span>
-          <div class="sep"></div>
-          <input placeholder="Search gadgets..." id="rop-query" style="width:160px" oninput="searchROP()">
-          <select id="rop-class" onchange="searchROP()"><option value="">All classes</option></select>
-        </div>
+      <!-- ===== Auto Solve ===== -->
+      <div class="panel" id="panel-auto">
         <div class="scroll">
-          <table class="dtable"><thead><tr><th>Address</th><th>Gadget</th><th>Classes</th></tr></thead><tbody id="rop-tbody"></tbody></table>
+          <div class="hero">
+            <div>
+              Recon + first move. Classifies the target, then runs each solver
+              strategy in priority order &mdash; SMC unwrap, emulate, keygen,
+              angr, ret2win, format-string, UAF &mdash; stopping at the first
+              flag. Whatever the outcome, the ranked plan, every attempt's
+              recovered parameters and a runnable scaffold are reported below:
+              a failed solve still hands you the next move.
+            </div>
+            <button class="bigbtn" id="auto-btn" onclick="runAutoSolve()">Run Recon + Solve</button>
+            <div id="auto-status" style="font-size:11.5px;color:var(--text-muted)"></div>
+            <div id="auto-flag" class="flagbox" style="display:none" onclick="copyText(this.textContent, this)"></div>
+          </div>
+          <div id="auto-plan" style="padding:0 26px 8px;font-size:11px;color:var(--text-muted);white-space:pre-wrap"></div>
+          <div id="auto-attempts"></div>
+          <pre id="auto-proof" style="display:none;margin:8px 26px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);font-size:10.5px;line-height:1.6;white-space:pre-wrap;max-height:44vh;overflow:auto"></pre>
+        </div>
+      </div>
+
+      <!-- ===== Data (imports / exports / symbols / strings / sections) ===== -->
+      <div class="panel" id="panel-imports">
+        <div class="subnav" id="data-subnav">
+          <button class="on" data-sub="imp" onclick="sub('imports','imp')">Imports</button>
+          <button data-sub="exp" onclick="sub('imports','exp')">Exports</button>
+          <button data-sub="sym" onclick="sub('imports','sym')">Symbols</button>
+          <button data-sub="str" onclick="sub('imports','str')">Strings</button>
+          <button data-sub="sec" onclick="sub('imports','sec')">Sections</button>
+        </div>
+        <div class="subview on" data-sub="imp">
+          <div class="tb"><input placeholder="Search imports..." id="imps-search" oninput="loadImports()" style="width:100%"><span class="v" id="imps-count"></span></div>
+          <div class="scroll"><table class="dtable" id="imp-tbl"><thead><tr><th>Name</th><th>Library</th><th>Risk</th></tr></thead><tbody id="imp-tbody"></tbody></table></div>
+        </div>
+        <div class="subview" data-sub="exp">
+          <div class="scroll"><table class="dtable" id="exp-tbl"><thead><tr><th>Name</th><th>Address</th></tr></thead><tbody id="exp-tbody"></tbody></table></div>
+        </div>
+        <div class="subview" data-sub="sym">
+          <div class="scroll"><table class="dtable" id="sym-tbl"><thead><tr><th>Name</th><th>Address</th><th>Type</th><th>Binding</th></tr></thead><tbody id="sym-tbody"></tbody></table></div>
+        </div>
+        <div class="subview" data-sub="str">
+          <div class="tb"><input placeholder="Search strings..." id="str-search" oninput="loadStrings()" style="width:100%"><span class="v" id="str-count"></span></div>
+          <div class="scroll" id="str-container" style="padding:4px 10px;font-family:var(--font-mono);font-size:11px"></div>
+        </div>
+        <div class="subview" data-sub="sec">
+          <div class="scroll" style="padding:4px 0"><table class="tree" id="mem-tree"><thead><tr><th>Name</th><th>VAddr</th><th>Size</th><th>Flags</th><th>Entropy</th></tr></thead><tbody id="mem-tbody"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ===== Exploit (vulns / paths / ROP / solvers) ===== -->
+      <div class="panel" id="panel-exploit">
+        <div class="subnav" id="exp-subnav">
+          <button class="on" data-sub="vulns" onclick="sub('exploit','vulns')">Vulns</button>
+          <button data-sub="paths" onclick="sub('exploit','paths')">Attack Paths</button>
+          <button data-sub="rop" onclick="sub('exploit','rop')">ROP</button>
+          <button data-sub="solver" onclick="sub('exploit','solver')">Solvers</button>
+        </div>
+        <div class="subview on" data-sub="vulns">
+          <div id="vulns-empty" class="empty-state"><div class="ico" style="color:var(--green)">&#10003;</div><div class="big">No vulnerable imports detected</div></div>
+          <div class="scroll" id="vulns-list" style="display:none;padding:4px 0"></div>
+        </div>
+        <div class="subview" data-sub="paths">
+          <div class="tb"><button class="btn btn-primary" onclick="loadExploitPaths(this)">&#9889; Analyze Paths</button><span class="v" id="exploit-status">Click to analyze exploit primitives</span></div>
+          <div class="scroll" style="padding:10px" id="exploit-container"></div>
+        </div>
+        <div class="subview" data-sub="rop">
+          <div class="tb">
+            <button class="btn btn-primary" onclick="scanROP()" id="rop-scan-btn">&#8635; Scan</button>
+            <span class="v" id="rop-status">Not scanned</span><div class="sep"></div>
+            <input placeholder="Search gadgets..." id="rop-query" style="width:160px" oninput="searchROP()">
+            <select id="rop-class" onchange="searchROP()"><option value="">All classes</option></select>
+          </div>
+          <div class="scroll"><table class="dtable"><thead><tr><th>Address</th><th>Gadget</th><th>Classes</th></tr></thead><tbody id="rop-tbody"></tbody></table></div>
+        </div>
+        <div class="subview" data-sub="solver">
+          <div class="tb">
+            <select id="solver-type" style="flex:1;max-width:220px">
+              <option value="angr_find_flag">angr &mdash; Find Flag</option>
+              <option value="z3_constraint_solve">Z3 &mdash; Constraint Solve</option>
+              <option value="static_string_reconstruct">Static &mdash; String Reconstruct</option>
+              <option value="overflow_exploit">pwn &mdash; ret2win / BOF</option>
+              <option value="ret2libc">pwn &mdash; ret2libc</option>
+              <option value="rop_execve_chain">pwn &mdash; ROP execve</option>
+              <option value="shellcode_exploit">pwn &mdash; Shellcode Injection</option>
+              <option value="format_string_exploit">pwn &mdash; Format String</option>
+            </select>
+            <button class="btn btn-primary" onclick="runSolver(this)" id="solver-btn">Generate</button>
+            <button class="btn" onclick="executeSolver(this)" id="exec-btn" disabled>Run</button>
+            <span class="v" id="solver-status"></span>
+          </div>
+          <div class="scroll" style="padding:4px 8px;font-family:var(--font-mono);font-size:10px;white-space:pre-wrap;min-height:40%" id="solver-output">Select a solver type and click Generate.</div>
+          <div class="scroll" style="padding:4px 8px;font-family:var(--font-mono);font-size:10px;white-space:pre-wrap;border-top:1px solid var(--border);background:var(--bg2);display:none;min-height:30%" id="solver-result">Output will appear here after clicking Run.</div>
         </div>
       </div>
 
@@ -418,26 +479,6 @@ input:focus,select:focus { border-color:#6897bb; }
         </div>
       </div>
 
-      <!-- ===== Solver ===== -->
-      <div class="panel" id="panel-solver">
-        <div class="tb">
-          <select id="solver-type" style="flex:1;max-width:220px">
-            <option value="angr_find_flag">angr — Find Flag</option>
-            <option value="z3_constraint_solve">Z3 — Constraint Solve</option>
-            <option value="static_string_reconstruct">Static — String Reconstruct</option>
-            <option value="overflow_exploit">pwn — ret2win / BOF</option>
-            <option value="ret2libc">pwn — ret2libc</option>
-            <option value="rop_execve_chain">pwn — ROP execve</option>
-            <option value="shellcode_exploit">pwn — Shellcode Injection</option>
-            <option value="format_string_exploit">pwn — Format String</option>
-          </select>
-          <button class="btn btn-primary" onclick="runSolver(this)" id="solver-btn">Generate</button>
-          <button class="btn" onclick="executeSolver(this)" id="exec-btn" disabled>Run</button>
-          <span class="v" id="solver-status"></span>
-        </div>
-        <div class="scroll" style="padding:4px 8px;font-family:var(--font-mono);font-size:10px;white-space:pre-wrap;min-height:40%" id="solver-output">Select a solver type and click Generate.</div>
-        <div class="scroll" style="padding:4px 8px;font-family:var(--font-mono);font-size:10px;white-space:pre-wrap;border-top:1px solid var(--border);background:var(--bg2);display:none;min-height:30%" id="solver-result">Output will appear here after clicking Run.</div>
-      </div>
 
       <!-- ===== XRefs ===== -->
       <div class="panel" id="panel-xrefs">
@@ -503,19 +544,116 @@ document.querySelectorAll('.sidebar button').forEach(btn => {
   });
 });
 
-// Tab switching within panels
-document.querySelectorAll('.tab-bar').forEach(bar => {
-  bar.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      bar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const parent = bar.closest('.panel');
-      parent.querySelectorAll('.tab-bar ~ .scroll > table').forEach(t => t.style.display = 'none');
-      const tgt = document.getElementById(tab.dataset.tab + '-tbl');
-      if (tgt) tgt.style.display = '';
-    });
-  });
-});
+// ── Sub-navigation inside merged panels ──────────────────────────────
+const SUB_ONSHOW = {
+  'imports:str': () => { if (loaded) loadStrings(); },
+  'imports:sec': () => { if (loaded) loadMemoryMap(); },
+  'imports:exp': () => { if (loaded) loadImports(); },
+  'imports:sym': () => { if (loaded) loadImports(); },
+  'exploit:paths': () => {},
+  'exploit:rop': () => { if (loaded && !document.getElementById('rop-tbody').children.length) searchROP(); },
+  'exploit:solver': () => {},
+};
+function sub(panel, name) {
+  const p = document.getElementById('panel-' + panel);
+  p.querySelectorAll('.subview').forEach(v => v.classList.toggle('on', v.dataset.sub === name));
+  p.querySelectorAll('.subnav button').forEach(b => b.classList.toggle('on', b.dataset.sub === name));
+  const hook = SUB_ONSHOW[panel + ':' + name];
+  if (hook) hook();
+}
+
+function copyText(text, el) {
+  navigator.clipboard.writeText(text).then(() => { if (el) { const o = el.textContent; el.textContent = 'copied ✓'; setTimeout(() => el.textContent = o, 800); } });
+}
+
+// ── Auto Solve ──────────────────────────────────────────────────────
+function onShowAuto() {}
+let _autoStream = null;
+
+function runAutoSolve() {
+  if (!loaded) { toast('Load a binary first', 'error'); return; }
+  const btn = document.getElementById('auto-btn');
+  const st = document.getElementById('auto-status');
+  const fb = document.getElementById('auto-flag');
+  const at = document.getElementById('auto-attempts');
+  const pr = document.getElementById('auto-proof');
+  const pl = document.getElementById('auto-plan');
+
+  if (_autoStream) { _autoStream.close(); _autoStream = null; }
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Working…';
+  fb.style.display = 'none'; pr.style.display = 'none'; at.innerHTML = ''; pl.textContent = '';
+  st.textContent = 'Starting recon…';
+  setStatus('Auto-solving…', true);
+
+  const rowId = (name) => 'att-' + name.replace(/[^\w-]/g, '');
+  const finish = (label, failed) => {
+    setStatus('Ready');
+    btn.disabled = false; btn.innerHTML = 'Run Recon + Solve';
+    if (failed) setStatus('Auto-solve failed');
+    if (_autoStream) { _autoStream.close(); _autoStream = null; }
+  };
+
+  const es = new EventSource('/api/autopwn/stream?budget_s=180&use_capa=true');
+  _autoStream = es;
+
+  es.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch { return; }
+    if (ev.kind === 'capa_running') {
+      st.textContent = 'Running capa capability scan… (first run on this binary can take a while; results are cached)';
+    } else if (ev.kind === 'recon') {
+      const rc = ev.recon || {};
+      const capaN = (rc.capa || []).length;
+      st.textContent = rc.arch ? 'Recon: ' + rc.arch + ' ' + (rc.bits || '') + '-bit ' + rc.format : 'Recon complete';
+      pl.textContent = rc.arch
+        ? rc.arch + ' ' + (rc.bits || '') + '-bit ' + rc.format + ' — ' +
+          Object.entries(rc.protections || {}).map(([k, v]) => k.split(' ')[0] + ':' + v).join(' ') +
+          (capaN ? '\ncapa: ' + capaN + ' capabilities (' + (rc.capa || []).slice(0, 6).join(', ') + (capaN > 6 ? ', …' : '') + ')' : '')
+        : '';
+    } else if (ev.kind === 'plan') {
+      const names = (ev.plan || []).map(p => p.name + '(' + p.score + ')').join('  →  ');
+      pl.textContent += (pl.textContent ? '\n' : '') + 'Plan: ' + (names || '(no strategy applies)');
+      st.textContent = 'Running ' + (ev.plan || []).length + ' strateg' + ((ev.plan || []).length === 1 ? 'y' : 'ies') + '…';
+    } else if (ev.kind === 'strategy_start') {
+      st.textContent = 'Running ' + ev.name + '  (' + (ev.index + 1) + '/' + ev.total + ')…';
+      const div = document.createElement('div');
+      div.className = 'att'; div.id = rowId(ev.name);
+      div.innerHTML = '<span class="run"><span class="spin"></span> ' + esc(ev.name) + '</span>' +
+        '<span class="msg">' + esc(ev.why || 'running…') + '</span>';
+      at.appendChild(div);
+    } else if (ev.kind === 'strategy_done') {
+      const div = document.getElementById(rowId(ev.name)) || at.appendChild(document.createElement('div'));
+      div.className = 'att'; div.id = rowId(ev.name);
+      div.innerHTML = '<span class="' + (ev.ok ? 'ok' : 'no') + '">' + (ev.ok ? '✓' : '✗') + ' ' + esc(ev.name) + '</span>' +
+        '<span class="msg">' + esc((ev.detail || '').slice(0, 260)) + '</span>' +
+        '<span class="t">' + (ev.seconds || 0).toFixed(1) + 's</span>';
+    } else if (ev.kind === 'done') {
+      const d = ev.result || {};
+      if (d.success) {
+        fb.textContent = d.flag; fb.style.display = '';
+        st.innerHTML = 'Solved via <b>' + esc(d.strategy) + '</b> in ' + d.seconds + 's — click the flag to copy';
+        toast('Flag: ' + d.flag, 'ok');
+      } else {
+        st.textContent = 'No flag in ' + (d.seconds || 0) + 's. ' + esc(d.notes || 'every strategy was exhausted.');
+        toast('Auto-solve found no flag', 'error');
+      }
+      if (d.proof) { pr.textContent = d.proof; pr.style.display = ''; }
+      finish();
+    } else if (ev.kind === 'error') {
+      st.textContent = '⚠ ' + esc(ev.message || 'solver error');
+      toast(ev.message || 'solver error', 'error');
+      finish('', true);
+    }
+  };
+  es.onerror = () => {
+    // EventSource fires onerror on normal stream close too — only surface it
+    // if we never reached a terminal event.
+    if (_autoStream === es && btn.disabled) {
+      st.textContent = '⚠ lost connection to the solver stream';
+      toast('Auto-solve stream disconnected', 'error');
+      finish('', true);
+    }
+  };
+}
 
 // ── Toast ──────────────────────────────────────────────────────────────
 function toast(msg, type) {
@@ -547,12 +685,56 @@ async function loadBinary(path) {
   await _load('/api/load', { method:'POST', body:fd });
 }
 
+// Every panel that is populated lazily (on tab open or button click) keeps
+// showing the previous binary's results until re-run. Wipe them so a freshly
+// loaded binary never shows stale analysis.
+function resetPanels() {
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  const txt = (id, s) => { const el = document.getElementById(id); if (el) el.textContent = s; };
+
+  // Decomp
+  set('code-func-list', '<div style="padding:20px;text-align:center;color:var(--text-muted)">No functions loaded</div>');
+  set('code-disasm', '<div style="padding:30px;text-align:center;color:var(--text-muted)">Click a function in the left sidebar</div>');
+  txt('code-func-name', '\u2014'); txt('code-func-addr', ''); txt('code-func-stats', ''); set('code-vars', '');
+  _codeFunctions = []; _codeCurrentAddr = null;
+
+  // Disassembly
+  set('disasm-tbody', ''); txt('disasm-count', '');
+  const dfn = document.getElementById('disasm-func'); if (dfn) dfn.innerHTML = '<option value="">\u2014 select function \u2014</option>';
+
+  // Hex
+  set('hx-grid', '');
+
+  // Auto Solve
+  txt('auto-status', ''); txt('auto-plan', ''); set('auto-attempts', '');
+  const af = document.getElementById('auto-flag'); if (af) { af.style.display = 'none'; af.textContent = ''; }
+  const ap = document.getElementById('auto-proof'); if (ap) { ap.style.display = 'none'; ap.textContent = ''; }
+
+  // Exploit (vulns / paths / rop / solvers)
+  const vl = document.getElementById('vulns-list'); if (vl) { vl.style.display = 'none'; vl.innerHTML = ''; }
+  const ve = document.getElementById('vulns-empty'); if (ve) ve.style.display = '';
+  set('exploit-container', ''); txt('exploit-status', 'Click to analyze exploit primitives');
+  set('rop-tbody', ''); txt('rop-status', 'Not scanned');
+  const rc = document.getElementById('rop-class'); if (rc) rc.innerHTML = '<option value="">All classes</option>';
+  set('solver-output', 'Select a solver type and click Generate.');
+  const sr = document.getElementById('solver-result'); if (sr) { sr.style.display = 'none'; sr.textContent = 'Output will appear here after clicking Run.'; }
+  txt('solver-status', '');
+  const eb = document.getElementById('exec-btn'); if (eb) eb.disabled = true;
+
+  // CAPA
+  set('capa-tbody', ''); txt('capa-status', 'Not analyzed yet');
+
+  // Xrefs
+  set('xref-callers', ''); set('xref-callees', ''); txt('xref-status', '');
+}
+
 async function _load(url, opts) {
   setStatus('Loading binary\u2026', true);
   try {
     const r = await fetch(url, opts);
     const d = await r.json();
     if (d.status !== 'ok') throw new Error(d.detail || 'load failed');
+    resetPanels();
     loaded = true; state.info = d.info; state.filename = d.filename || undefined;
     document.getElementById('conn-dot').className = 'dot online';
     document.getElementById('header-path').textContent = '\u2014 ' + (state.filename || d.info.path);
@@ -996,27 +1178,12 @@ async function showCodeFunction(vaddrHex) {
       // Syntax-highlighted pseudo-C
       const lines = code.split('\n');
       disasmEl.innerHTML = '<div style="padding:4px 0">' +
-        lines.map((line, idx) => {
-          let html = esc(line);
-          // Basic syntax coloring
-          html = html.replace(/\b(int|void|char|return|if|goto|unsigned|long|short)\b/g,
-            '<span style="color:#cc7832">$1</span>');
-          html = html.replace(/\b(0x[0-9a-fA-F]+)\b/g,
-            '<span style="color:#6897bb">$1</span>');
-          html = html.replace(/\/\/.*/g,
-            '<span style="color:#6a8759">$&</span>');
-          html = html.replace(/\b([a-zA-Z_]\w*)\s*\(/g,
-            '<span style="color:#ffc66d;font-weight:500">$1</span>(');
-          html = html.replace(/\/\*.*?\*\//g,
-            '<span style="color:#6a8759">$&</span>');
-          html = html.replace(/(L_[0-9a-fA-F]+:)/g,
-            '<span style="color:#6897bb;font-weight:600">$1</span>');
-          const bg = idx === 0 || line.trim().startsWith('//') ? '' : (line.trim() === '}' ? '' : '');
-          return '<div style="display:flex;line-height:18px;'+(idx % 2 ? 'background:rgba(255,255,255,.015)' : '')+'">' +
-            '<span style="width:48px;flex-shrink:0;text-align:right;padding-right:10px;color:var(--text-muted);user-select:none;font-size:9px">'+(idx+1)+'</span>' +
-            '<span style="white-space:pre;flex:1">'+html+'</span>' +
-          '</div>';
-        }).join('') +
+        lines.map((line, idx) =>
+          '<div class="pc-row">' +
+            '<span class="pc-ln">' + (idx + 1) + '</span>' +
+            '<span class="pc-code">' + highlightPseudoC(line) + '</span>' +
+          '</div>'
+        ).join('') +
         '</div>';
     } else {
       // Assembly view (existing)
@@ -1146,7 +1313,7 @@ async function loadExploitPaths(btn) {
     let html = '';
 
     // Protections bar
-    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,.03);border-radius:6px">';
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border)">';
     for (const [k,v] of Object.entries(prot)) {
       const col = v==='Enabled'?'var(--green)':v==='Disabled'||v.indexOf('No')>-1?'var(--red)':'var(--text-muted)';
       html += '<span style="font-size:10px;font-family:var(--font-mono)"><span style="color:var(--text-muted)">'+esc(k)+': </span><span style="color:'+col+';font-weight:600">'+esc(v)+'</span></span>';
@@ -1161,7 +1328,7 @@ async function loadExploitPaths(btn) {
     const g = sum.gadgets || {};
     for (const [k,v] of Object.entries(g)) facts.push('<span style="color:var(--text-muted)">'+esc(k)+'</span> @ <span style="color:var(--blue)">'+esc(v)+'</span>');
     if (facts.length) {
-      html += '<div style="font-size:10px;font-family:var(--font-mono);line-height:1.7;margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,.02);border-radius:6px">'+facts.join('<br>')+'</div>';
+      html += '<div style="font-size:10px;font-family:var(--font-mono);line-height:1.7;margin-bottom:10px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border)">'+facts.join('<br>')+'</div>';
     }
     if ((sum.win_functions||[]).length) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">🏆 Win / backdoor functions</div>';
@@ -1190,7 +1357,7 @@ async function loadExploitPaths(btn) {
       for (const f of funcs) {
         const addrHtml = f.address ? '<span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(f.address)+'</span>' : '';
         const clickableName = '<a href="#" onclick="showCodeWithSearch(\''+esc(f.name)+'\');return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none;cursor:pointer">'+esc(f.name)+'</a>';
-        html += '<div style="padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,.02);border-radius:6px;border-left:3px solid '+(f.severity==='CRITICAL'?'var(--red)':f.severity==='HIGH'?'var(--orange)':'var(--yellow)')+'">' +
+        html += '<div style="padding:8px 10px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+(f.severity==='CRITICAL'?'var(--red)':f.severity==='HIGH'?'var(--orange)':'var(--yellow)')+'">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
             clickableName +
             addrHtml +
@@ -1396,6 +1563,25 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// Highlight one line of pseudo-C. Passes emit class="pc-*" only — never an
+// inline var(--x) — so a later pass can't re-match its own output.
+function highlightPseudoC(line) {
+  const html = esc(line);
+  const trimmed = line.trimStart();
+  if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
+    return '<span class="pc-com">' + html + '</span>';
+  }
+  return html
+    // function calls first: no markup exists yet for the \w+\( rule to corrupt
+    .replace(/\b(?!(?:if|for|while|switch|return|sizeof|goto)\b)([A-Za-z_]\w*)(\s*)\(/g,
+      '<span class="pc-fn">$1</span>$2(')
+    .replace(/\b(int|void|char|return|if|else|for|while|goto|unsigned|signed|long|short|struct|const)\b/g,
+      '<span class="pc-kw">$1</span>')
+    .replace(/\b(0x[0-9a-fA-F]+|\d+)\b/g, '<span class="pc-num">$1</span>')
+    .replace(/\b(L_[0-9a-fA-F]+:)/g, '<span class="pc-lbl">$1</span>')
+    .replace(/(\/\/[^\n]*)/g, '<span class="pc-com">$1</span>');
+}
+
 async function quitServer() {
   if (!confirm('Quit the CTF Triage server?')) return;
   try {
@@ -1405,10 +1591,6 @@ async function quitServer() {
   } catch(e) { toast(e.message,'error'); }
 }
 
-// ── Init ───────────────────────────────────────────────────────────────
-(function() {
-  // connection dot ready
-})();
 </script>
 </body>
 </html>

@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ master ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ master ]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC — run the deps-canary job below
 
 jobs:
   test:
@@ -47,3 +50,23 @@ jobs:
         fail_ci_if_error: false
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Solver suite against UNPINNED latest angr / unicorn / pwntools / capstone,
+  # so a breaking backend release is caught on a schedule instead of mid-CTF.
+  # Weekly (see the cron above) or on demand; never gates a PR.
+  deps-canary:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    - name: Set up Python
+      run: uv python install 3.13
+    - name: Solver suite vs unpinned latest backends
+      run: make deps-canary

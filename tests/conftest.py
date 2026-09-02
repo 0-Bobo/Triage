@@ -57,6 +57,17 @@ def vuln_samples() -> dict[str, Path]:
     return {n: SAMPLES / n for n in names}
 
 
+@pytest.fixture(scope="session")
+def autopwn_samples() -> dict[str, Path]:
+    """Deterministic targets for the auto-solver (sources in samples/src):
+    memflag   x86-64 ELF, builds `flag{MEMbuilt_42}` in a heap buffer, prints nothing
+    ret2win   x86-64 ELF, `read()` overflow + win() that puts a flag
+    keycheck  x86-64 ELF, fgets + strcmp against "sup3rs3cr3t", prints the flag on match
+    keygate   x86-64 ELF, `scanf("%x")` guarded by `k == 0xdeadbeef` → win()
+    """
+    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate")}
+
+
 @pytest.fixture
 def loader(sample_path: Path) -> BinaryLoader:
     """A fresh BinaryLoader over the sample ELF, closed on teardown."""

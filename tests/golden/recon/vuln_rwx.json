@@ -1,0 +1,8 @@
+{
+  "format": "ELF", "arch": "x86_64", "bits": 64,
+  "protections": {
+    "NX (No-Execute)": "Enabled", "PIE (ASLR)": "Disabled", "RELRO": "None",
+    "Stack Canary": "Disabled", "Fortify Source": "Disabled", "RWX Segments": "YES — shellcode possible"
+  },
+  "plan": ["smc", "emulate"]
+}

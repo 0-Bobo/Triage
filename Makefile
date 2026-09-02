@@ -1,4 +1,4 @@
-.PHONY: help install sync test lint format check coverage audit clean dev
+.PHONY: help install sync test lint format check coverage coverage-strat audit clean dev autopwn deps-canary
 
 help:
 	@echo "Available targets:"
@@ -9,7 +9,9 @@ help:
 	@echo "  format     - Format code with ruff"
 	@echo "  check      - Run lint and tests"
 	@echo "  coverage   - Run tests with coverage report"
+	@echo "  coverage-strat - Report-only coverage of the omit-ed autopwn strategy layer"
 	@echo "  audit      - Scan installed dependencies for known CVEs"
+	@echo "  deps-canary- Re-run the autopwn suite against the LATEST angr/unicorn/pwntools/capstone"
 	@echo "  clean      - Clean temporary files"
 	@echo "  dev        - Setup development environment"
 
@@ -38,10 +40,21 @@ format:
 check: lint test
 
 coverage:
-	uv run pytest --cov=triage_web --cov-report=term --cov-report=html --cov-report=xml
+	uv run pytest --cov=triage_web --cov-report=term-missing --cov-report=html --cov-report=xml
+
+coverage-strat:  ## report-only: how much of the omit-ed strategy layer the e2e tests actually reach (no gate)
+	uv run coverage run --rcfile=/dev/null --source=triage_web/autopwn -m pytest tests/test_autopwn.py -q
+	uv run coverage report --rcfile=/dev/null --include='*/autopwn/strat_*,*/autopwn/capa_scan.py'
 
 audit:
 	uv run pip-audit --skip-editable
+
+deps-canary:     ## catch upstream breakage early: run the solver suite on unpinned latest backends
+	uv run --isolated --with 'angr' --with 'unicorn' --with 'pwntools' --with 'capstone' \
+		pytest tests/test_autopwn.py tests/test_solvers.py -q
+
+autopwn:         ## auto-solve a CTF binary:  make autopwn BIN=path/to/chall
+	uv run python -m triage_web.autopwn $(BIN)
 
 clean:
 	rm -rf .pytest_cache/ htmlcov/ .coverage coverage.xml .ruff_cache/

@@ -16,3 +16,14 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+  # Now that CI actually fires (on master), stop a red push before it leaves
+  # the machine. Runs only on `git push`, not on every commit.
+  - repo: local
+    hooks:
+      - id: pytest-coverage-gate
+        name: pytest (100% coverage gate)
+        entry: uv run pytest --cov=triage_web --cov-report= -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
