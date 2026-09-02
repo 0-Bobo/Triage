@@ -3,7 +3,7 @@
 Targets network services that keep a table of client "session" structs
 whose fields include a callback function pointer, free a session on
 disconnect **without clearing the table**, then later invoke the stale
-callback (``Binaries/bidsniper``). Reallocating the freed struct as some
+callback. Reallocating the freed struct as some
 other object lets an attacker plant an arbitrary function pointer; here we
 plant the service's own flag-printing routine.
 
@@ -158,7 +158,7 @@ def _enclosing_prologue(insns, idx) -> int | None:
 # ``arg1`` must be set depends on what the flag function's own callee does
 # with it. Three shapes, each needing a different value:
 #   id   - compared against a per-session id field in a scan loop  -> pass the
-#          receiver's session id (bidsniper).
+#          receiver's session id.
 #   fd   - handed straight to send()/write()/sendto() as the socket fd -> pass
 #          the receiver socket's server-side fd (needs a /proc lookup).
 #   ptr  - dereferenced as a pointer -> needs a heap leak; not solvable blind.

@@ -5,8 +5,7 @@ Drives the target with a symbolic stdin (or argv) and explores toward a
 paths. On a hit it reports the concrete input that reaches success and
 whatever the program printed there (often the flag itself).
 
-Best for keygen-style crackmes and password gates:
-``Binaries/crackme.exe``, ``Binaries/Youre_Not_Welcome``. Large C++ or
+Best for keygen-style crackmes and password gates. Large C++ or
 heavily-obfuscated targets may not converge inside the step budget — the
 result then carries ``ok=False`` with a reason, and the orchestrator moves
 on.

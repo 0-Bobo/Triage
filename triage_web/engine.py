@@ -315,7 +315,7 @@ class Disassembler:
         return insns
 
     # ``eb 01`` / ``74 01`` / ``75 01`` + one junk byte is the classic
-    # anti-disassembly trick (see docs/oracle-analysis.md): a real short
+    # anti-disassembly trick: a real short
     # jump/branch whose target lands 1 byte past the following instruction,
     # so a linear sweep decodes the junk byte and desyncs. When the jump is
     # unconditional (``eb``) the junk is dead; when conditional we still take

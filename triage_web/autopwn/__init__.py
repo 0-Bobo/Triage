@@ -62,7 +62,7 @@ def _record(result: SolveResult, context: str | None = None) -> None:
     ``context`` tags where the run came from ("practice" / "live" / a CTF
     name, caller's choice via ``solve(context=)`` or ``$TRIAGE_CTX``). It is
     the hook for answering "is this tool actually opened first, under time
-    pressure?" — see ``docs/TODO.md`` P6.
+    pressure?"
     """
     dest = os.environ.get("TRIAGE_RESULTS") or str(Path.home() / ".triage" / "results.jsonl")
     row = {

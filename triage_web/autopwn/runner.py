@@ -175,7 +175,7 @@ def _sh_probe(bash_prefix: list[str]) -> set[str]:
     cache = _sh_probe.__dict__.setdefault("_c", {})
     if key not in cache:
         probe = (
-            "bwrap --ro-bind / / --dev /dev --tmpfs /tmp true 2>/dev/null && echo bwrap; "
+            "bwrap --unshare-all --ro-bind / / --dev /dev --tmpfs /tmp true 2>/dev/null && echo bwrap; "
             "unshare -rn true 2>/dev/null && echo unshare"
         )
         try:

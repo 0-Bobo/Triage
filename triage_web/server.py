@@ -1145,7 +1145,7 @@ def main():  # pragma: no cover - CLI entry point, starts uvicorn
     import uvicorn
 
     log.info(f"Starting server at http://{args.host}:{args.port}")
-    print(f"\n  \033[1;36mTriage Web — http://localhost:{args.port}\033[0m\n")
+    print(f"\n  \033[1;36mTriage  http://localhost:{args.port}\033[0m\n")
     # Plain host/port bind — portable across Linux and Windows. (An earlier
     # version passed an inherited socket via uvicorn's `fd=`, which fails on
     # Windows because uvicorn resolves it with socket.AF_UNIX.)

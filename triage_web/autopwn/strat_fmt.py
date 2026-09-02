@@ -5,8 +5,8 @@ Finds a ``printf``-family call whose format argument is user-controlled
 
 * for a local stdin program: probes ``%p`` offsets and dumps the stack,
   scanning the leak for a flag.
-* for a network service (``Binaries/bidsniper``): starts the server in
-  WSL, connects, and runs the same probe over the socket.
+* for a network service: starts the server (via WSL on Windows), connects,
+  and runs the same probe over the socket.
 
 Anything that needs a real interactive shell is handed back as a
 ready-to-run pwntools script plus the recon.

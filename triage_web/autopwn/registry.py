@@ -93,7 +93,7 @@ def _looks_self_modifying(ldr: BinaryLoader) -> str | None:
         raw = b""
     if raw[:4] == b"\x7fELF" and len(raw) >= 16:
         # a sane ident always has EI_VERSION == 1 and zero padding (bytes 9..15);
-        # the oracle overwrites the lot with 0x02, which pyelftools/objdump reject
+        # some anti-tooling targets overwrite the lot with 0x02, which pyelftools/objdump reject
         if raw[6] != 1 or any(raw[9:16]):
             return "mangled ELF e_ident (anti-tooling)"
     for seg in ldr.get_segments():

@@ -1,7 +1,10 @@
 [project]
 name = "triage"
-version = "2.0.0"
-description = "Triage — CTF Binary Analysis Workbench (web edition)"
+version = "2.6.0"
+description = "CTF binary-analysis workbench: web UI plus an autopwn recon layer"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "0-Bobo" }]
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.110",
@@ -24,10 +27,13 @@ analysis = [
   "flare-capa>=7.0",
   "r2pipe>=1.7",
 ]
-# PyQt6 desktop edition (triage.py)
-desktop = ["PyQt6>=6.4", "qtawesome>=1.2.3", "qt-material>=2.14"]
 # pwntools for the generated exploit solver scripts
 exploit = ["pwntools>=4.15"]
+
+[project.urls]
+Repository = "https://github.com/0-Bobo/Triage"
+Issues = "https://github.com/0-Bobo/Triage/issues"
+Changelog = "https://github.com/0-Bobo/Triage/blob/master/CHANGELOG.md"
 
 [project.scripts]
 triage-web = "triage_web.server:main"
@@ -47,10 +53,7 @@ artifacts = ["triage_web/index.html"]
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-# docs/ holds prose with hand-aligned illustrative code blocks — ruff's markdown
-# code formatter would flatten them. apps/desktop/triage.py is the frozen desktop
-# edition (see CONTRIBUTING.md "Editions"); it is not on the maintained path.
-extend-exclude = ["samples", "wsl", "capa-rules", "docs", "apps/desktop/triage.py"]
+extend-exclude = ["samples", "capa-rules"]
 
 [tool.ruff.lint]
 select = [
@@ -85,8 +88,6 @@ ignore = [
 # running generated exploit scripts IS the feature.
 "triage_web/autopwn/*" = ["S603", "S607", "S310"]
 "triage_web/autopwn/strat_angr.py" = ["S603", "S607", "S110", "BLE001"]
-# apps/desktop/triage.py (frozen desktop edition) is excluded from ruff wholesale
-# via [tool.ruff] extend-exclude — no per-file-ignores needed.
 "main.py" = ["E402"]
 # Regression tests keep long hex fixture literals inline.
 "tests/test_engine.py" = ["E501"]

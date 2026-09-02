@@ -1,11 +1,11 @@
 """Static self-modifying-code unwrap.
 
 Some reversing challenges ship the real code encrypted and decrypt it in a
-tiny ``RWE`` stub at entry (RingZer0's *oracle* is the canonical example:
-mangled ``e_ident``, overlapping ``RWX`` ``PT_LOAD``s, and a 68-byte decoder
-that walks the text backwards running ``ror 7 / not / rol 3`` on every byte).
-The decoder there takes **no key** — the transform is fixed — so the plaintext
-is fully recoverable without running anything.
+tiny ``RWE`` stub at entry. The canonical shape: mangled ``e_ident``,
+overlapping ``RWX`` ``PT_LOAD``s, and a ~68-byte decoder that walks the text
+backwards running e.g. ``ror 7 / not / rol 3`` on every byte. When the decoder
+takes **no key** — the transform is fixed — the plaintext is fully recoverable
+without running anything.
 
 This strategy does not try to disassemble an arbitrary obfuscated decoder.
 Instead it:
@@ -14,7 +14,7 @@ Instead it:
 2. repairs the header if needed,
 3. brute-forces a small family of reversible per-byte transforms over the
    RWE region — identity, ``xor k``, ``not``, ``rol/ror n``, ``add/sub k``
-   and the *oracle* composite ``rol1; not; rol3`` (+ its inverse) — scoring
+   and the reference composite ``rol1; not; rol3`` (+ its inverse) — scoring
    each result by how much of it decodes as valid x86 and whether flag-shaped
    ASCII appears,
 4. writes the repaired + decoded image to a temp file and re-runs the flag
@@ -37,7 +37,7 @@ from triage_web.loader import BinaryLoader
 HAS_CAPSTONE = importlib.util.find_spec("capstone") is not None  # engine.Disassembler needs it
 
 _ELF_MAGIC = b"\x7fELF"
-_DEFAULT_LOAD_BASE = 0x400000  # non-PIE statics; the oracle lives here
+_DEFAULT_LOAD_BASE = 0x400000  # non-PIE statics live here
 
 
 @dataclass
@@ -62,15 +62,15 @@ def _rol(x: int, n: int) -> int:
     return ((x << n) | (x >> (8 - n))) & 0xFF if n else x & 0xFF
 
 
-def _oracle_decode(x: int) -> int:
-    """The *oracle* decoder, per docs/oracle-analysis.md: ``ror 7`` (== ``rol 1``
+def _ref_decode(x: int) -> int:
+    """The reference composite decoder: ``ror 7`` (== ``rol 1``
     for a byte), then ``not``, then ``rol 3``."""
     x = _rol(x, 1)
     x = (~x) & 0xFF
     return _rol(x, 3)
 
 
-def _oracle_encode(x: int) -> int:
+def _ref_encode(x: int) -> int:
     x = _rol(x, 5)  # inverse of rol 3
     x = (~x) & 0xFF
     return _rol(x, 7)  # inverse of rol 1
@@ -88,8 +88,8 @@ def _transforms() -> list[tuple[str, list[int]]]:
     for k in (1, 2, 3, 4, 5, 7, 0x10, 0x2A, 0x7F, 0x80, 0xAA):
         out.append((f"sub 0x{k:02x}", [(x - k) & 0xFF for x in range(256)]))
         out.append((f"add 0x{k:02x}", [(x + k) & 0xFF for x in range(256)]))
-    # the oracle decoder is an involution (rol1;not;rol3 == its own inverse)
-    out.append(("oracle rol1;not;rol3", [_oracle_decode(x) for x in range(256)]))
+    # this composite is an involution (rol1;not;rol3 == its own inverse)
+    out.append(("rol1;not;rol3", [_ref_decode(x) for x in range(256)]))
     return out
 
 
@@ -186,7 +186,7 @@ def _best_transform(region: bytes, bits: int) -> tuple[str, list[int], float]:
 
 
 def _repair_eident(raw: bytearray) -> bool:
-    """The oracle overwrites ``e_ident[4..15]``. Restore a sane 64-bit LE
+    """Such a target overwrites ``e_ident[4..15]``. Restore a sane 64-bit LE
     identification block. Returns True if anything changed."""
     if raw[:4] != _ELF_MAGIC or len(raw) < 20:
         return False
@@ -267,7 +267,7 @@ def _drop_contained_load(raw: bytearray) -> list[str]:
 def _decoder_region(raw: bytes) -> tuple[int, int] | None:
     """Read the entry decoder stub and recover the byte range it rewrites.
 
-    The oracle stub is ``mov eax, END ; mov ecx, COUNT ; loop { transform
+    The decoder stub is ``mov eax, END ; mov ecx, COUNT ; loop { transform
     [rax]; dec rax }`` — so the encrypted span is ``[END-COUNT, END]``. We
     skip-junk-disassemble the smallest executable segment covering
     ``e_entry`` and pull the two largest 32-bit immediates that look like an

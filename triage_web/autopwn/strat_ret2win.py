@@ -9,8 +9,8 @@
    flag / shell output.
 
 x86 / x86-64 ELF get the full concrete treatment. Other architectures
-(e.g. ``Binaries/IntroToSparc``) get a ready-to-run script plus the static
-recon, since we usually can't execute them here.
+(SPARC / MIPS / PPC / ...) get a ready-to-run script plus the static recon,
+since we usually can't execute them here.
 """
 
 from __future__ import annotations

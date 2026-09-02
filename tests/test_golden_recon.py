@@ -8,8 +8,8 @@ not assert the *exact* ranked plan.
 
 Strategy-level golden output (``strat_smc`` decoded bytes, ``strat_angr``
 recovered offsets, …) is deliberately NOT here: it needs checked-in CTF
-binaries and the heavy optional backends. See ``docs/TODO.md`` P3 — the
-canary job (``make deps-canary``) covers the backend-churn side.
+binaries and the heavy optional backends; the canary job
+(``make deps-canary``) covers the backend-churn side.
 
 Regenerate a case after an *intentional* scoring change: run the test, read
 the assertion diff, and write the new shape into the matching JSON.

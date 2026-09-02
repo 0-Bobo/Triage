@@ -9,7 +9,6 @@ Linux; on Windows the runner bridges to WSL).
 from __future__ import annotations
 
 import json
-import pathlib
 import platform
 
 import pytest
@@ -27,7 +26,7 @@ _CAN_RUN_ELF = have_wsl() or platform.system() == "Linux"
 
 
 def test_to_wsl_translates_and_passes_through():
-    assert to_wsl(r"C:\Projects\Triage\x") == "/mnt/c/Projects/Triage/x"
+    assert to_wsl(r"C:\code\demo\x") == "/mnt/c/code/demo/x"
     assert to_wsl("/already/posix") == "/already/posix"
 
 
@@ -228,7 +227,7 @@ def test_registry_scorers_return_none_when_inapplicable():
 # ── self-modifying-code strategy ─────────────────────────────────────
 
 
-def test_smc_transform_family_recovers_the_oracle_decoder(autopwn_samples):
+def test_smc_transform_family_recovers_the_reference_decoder(autopwn_samples):
     from triage_web.autopwn import strat_smc as smc
     from triage_web.loader import BinaryLoader
 
@@ -237,9 +236,9 @@ def test_smc_transform_family_recovers_the_oracle_decoder(autopwn_samples):
         clear = bytes(ldr._get_text_section()[0])[:512]  # a real x86-64 function body
     finally:
         ldr.close()
-    encrypted = bytes(smc._oracle_encode(b) for b in clear)
+    encrypted = bytes(smc._ref_encode(b) for b in clear)
     name, tbl, score = smc._best_transform(encrypted, 64)
-    assert name == "oracle rol1;not;rol3"
+    assert name == "rol1;not;rol3"
     assert smc._apply(tbl, encrypted) == clear
     assert score > smc._score(encrypted, 64) + smc._MARGIN
 
@@ -307,7 +306,7 @@ def test_smc_strategy_dispatch(monkeypatch, autopwn_samples):
     monkeypatch.setattr(
         strat_smc,
         "solve_smc",
-        lambda *a, **k: strat_smc.SmcResult(True, flag="flag{smc}", transform="oracle rol1;not;rol3", decoded_path=dec),
+        lambda *a, **k: strat_smc.SmcResult(True, flag="flag{smc}", transform="rol1;not;rol3", decoded_path=dec),
     )
     att = ap._run_strategy("smc", str(autopwn_samples["memflag"]), None, 30)
     assert att.ok and att.flag == "flag{smc}"
@@ -459,20 +458,6 @@ def test_uaf_classifies_how_the_callback_arg_is_used():
     assert u._classify_arg1_use(body("4989fd4c3ba830050000"), {}) == "id"
     # mov edi, edi ; call send@plt  -> arg1 handed to send() -> fd
     assert u._classify_arg1_use(body("89ffe800000000"), {0x1007: "send@GLIBC_2.2.5"}) == "fd"
-
-
-@pytest.mark.skipif(
-    not (pathlib.Path(__file__).resolve().parents[1] / "Binaries" / "bidsniper").is_file(),
-    reason="needs the user's Binaries/bidsniper CTF file",
-)
-def test_uaf_recovers_bidsniper_routing(monkeypatch):
-    from triage_web.autopwn import strat_uaf
-
-    monkeypatch.setattr(strat_uaf, "_run_selftest", lambda *a, **k: None)  # recon only, no spawned service
-    r = strat_uaf.solve_uaf(str(pathlib.Path(__file__).resolve().parents[1] / "Binaries" / "bidsniper"))
-    assert r.flag_func == 0x402536
-    assert r.route == "id"  # send-to-session-by-id, not an fd or a raw pointer
-    assert "ROUTE     = 'id'" in r.script
 
 
 # ── ret2win strategy ─────────────────────────────────────────────────
