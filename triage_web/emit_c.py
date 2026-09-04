@@ -17,7 +17,7 @@ Handles:
 
 from __future__ import annotations
 
-from .cfg import BasicBlock, BlockType
+from .cfg import BasicBlock, BlockType, find_if_merge
 from .pcode import OpCode, PcodeOp, Varnode
 from .ssa_engine import SSAContext
 
@@ -68,6 +68,20 @@ class CCodeGenerator:
         "||": 12,
         "=": 13,
         ",": 14,
+    }
+
+    # De Morgan negation for each two-operand comparison opcode this
+    # generator knows about: (negated_opcode, swap_operands). EQUAL/NOTEQUAL
+    # are each other's negation with operands in the same order; a strict
+    # "less" negates to "greater-or-equal", which this IR only expresses as
+    # "less-or-equal" with operands swapped (e.g. `!(a < b)` is `b <= a`).
+    _NEGATE_OPCODE = {
+        OpCode.INT_EQUAL: (OpCode.INT_NOTEQUAL, False),
+        OpCode.INT_NOTEQUAL: (OpCode.INT_EQUAL, False),
+        OpCode.INT_SLESS: (OpCode.INT_SLESSEQUAL, True),
+        OpCode.INT_SLESSEQUAL: (OpCode.INT_SLESS, True),
+        OpCode.INT_LESS: (OpCode.INT_LESSEQUAL, True),
+        OpCode.INT_LESSEQUAL: (OpCode.INT_LESS, True),
     }
 
     def __init__(self, ctx: SSAContext):
@@ -123,41 +137,66 @@ class CCodeGenerator:
                 self._writeln(f"goto {label};")
 
     def _emit_condition(self, block: BasicBlock, visited: set):
-        """Emit if/else from a conditional branch block."""
+        """Emit if/else from a conditional branch block.
+
+        Three cases, depending on where `find_if_merge` says the arms
+        reconverge:
+          (a) the taken arm IS the merge (no-else, negated: the CBRANCH's
+              own predicate must fire to *skip* the body, so the rendered
+              condition is its logical negation)
+          (b) the fallthrough arm IS the merge (no-else, natural polarity)
+          (c) classic two-body if/else (or no merge found at all)
+        """
         if len(block.succs) < 2:
             self._emit_plain(block, visited)
             return
 
         true_block = block.succs[0]
         false_block = block.succs[1]
+        merge = find_if_merge(true_block, false_block)
 
-        # Find merge point (common successor of both branches)
-        t_succs = set(true_block.succs)
-        f_succs = set(false_block.succs)
-        merge_blocks = t_succs & f_succs
-        merge = next(iter(merge_blocks)) if merge_blocks else None
+        # Pre-mark `merge` visited before descending into either arm: a
+        # then-body that falls through (or unconditionally branches) into
+        # `merge` must not re-emit it early, since the merge is always
+        # emitted once, explicitly, at the end of this method. Each arm
+        # gets its own copy so one arm's visitation doesn't hide content
+        # from the other.
+        arm_visited = visited.copy()
+        if merge is not None:
+            arm_visited.add(merge)
 
-        # Build condition from the CBRANCH op
-        condition = self._build_condition(block)
-
-        self._writeln(f"if ({condition}) {{")
-        self.indent += 1
-        # Only emit true_block if it doesn't goto the merge point
-        if true_block.succs != [merge] or len(true_block.ops) > 0:
-            self._emit_block_graph(true_block, visited.copy())
-        self.indent -= 1
-        self._writeln("}")
-
-        # Check if false_block has real content
-        if false_block and (len(false_block.ops) > 0 or set(false_block.succs) != {merge}):
-            self._writeln("else {")
+        if merge is true_block and false_block is not merge:
+            condition = self._build_condition(block, negate=True)
+            self._writeln(f"if ({condition}) {{")
             self.indent += 1
-            self._emit_block_graph(false_block, visited.copy())
+            self._emit_block_graph(false_block, arm_visited.copy())
+            self.indent -= 1
+            self._writeln("}")
+        elif merge is false_block and true_block is not merge:
+            condition = self._build_condition(block, negate=False)
+            self._writeln(f"if ({condition}) {{")
+            self.indent += 1
+            self._emit_block_graph(true_block, arm_visited.copy())
+            self.indent -= 1
+            self._writeln("}")
+        else:
+            condition = self._build_condition(block, negate=False)
+            self._writeln(f"if ({condition}) {{")
+            self.indent += 1
+            self._emit_block_graph(true_block, arm_visited.copy())
             self.indent -= 1
             self._writeln("}")
 
-        # Continue at merge point
-        if merge and merge not in visited:
+            # Only print `else` when false_block has real content of its own
+            if false_block and (len(false_block.ops) > 0 or set(false_block.succs) != {merge}):
+                self._writeln("else {")
+                self.indent += 1
+                self._emit_block_graph(false_block, arm_visited.copy())
+                self.indent -= 1
+                self._writeln("}")
+
+        # Continue at merge point (real, outer `visited` -- not `arm_visited`)
+        if merge is not None and merge not in visited:
             self._emit_block_graph(merge, visited)
 
     def _emit_while(self, block: BasicBlock, visited: set):
@@ -197,11 +236,35 @@ class CCodeGenerator:
         self.indent -= 1
         self._writeln("}")
 
-    def _build_condition(self, block: BasicBlock) -> str:
-        """Extract condition expression from CBRANCH ops in block."""
+    def _build_condition(self, block: BasicBlock, negate: bool = False) -> str:
+        """Extract condition expression from the block's CBRANCH op.
+
+        Inlines the comparison the condition varnode's `def_op` computes
+        (mirroring how `_op_expr` already renders `INT_EQUAL`/`INT_SLESS`/
+        etc. elsewhere in this file) rather than naming the varnode --
+        naming it would reference a `UNIQUE`-space temp that is never
+        declared anywhere in the output (nothing ever runs `_emit_plain`
+        over the branch block's own ops once it's dispatched as a
+        CONDITION block). Falls back to the raw varnode for the honest
+        eflags case (single-flag jumps with no clean two-operand form).
+        """
         for op in block.ops:
             if op.opcode == OpCode.CBRANCH and op.inputs:
-                return self._varnode_expr(op.inputs[0])
+                cond_vn = op.inputs[0]
+                def_op = cond_vn.def_op
+                if def_op is not None and len(def_op.inputs) >= 2:
+                    opcode = def_op.opcode
+                    operands = def_op.inputs[:2]
+                    if negate and opcode in self._NEGATE_OPCODE:
+                        opcode, swap = self._NEGATE_OPCODE[opcode]
+                        if swap:
+                            operands = [operands[1], operands[0]]
+                    sym = self._op_symbol(opcode)
+                    lhs = self._varnode_expr(operands[0])
+                    rhs = self._varnode_expr(operands[1])
+                    return f"{lhs} {sym} {rhs}"
+                expr = self._varnode_expr(cond_vn)
+                return f"!{expr}" if negate else expr
         return "1"
 
     def _emit_op(self, op: PcodeOp) -> str:

@@ -1556,12 +1556,14 @@ class Disassembler:
           2. p-code ops → CFG (via cfg.CFGBuilder)
           3. CFG → SSA form (via ssa_engine.build_ssa)
           4. SSA → simplify actions (via decompile_actions.default_pipeline)
+          4b. CFG → structured control flow (via cfg.CFGStructurer, over a
+              fresh cfg.DominatorTree computed after Step 4's block merges)
           5. SSA → C code (via emit_c.CCodeGenerator)
 
         This mirrors Ghidra's decompiler pipeline exactly.
         """
         try:
-            from .cfg import CFGBuilder
+            from .cfg import CFGBuilder, CFGStructurer, DominatorTree
             from .decompile_actions import default_pipeline
             from .emit_c import CCodeGenerator
             from .pcode import Translator
@@ -1591,6 +1593,14 @@ class Disassembler:
             # Step 4: SSA simplification actions
             pipeline = default_pipeline()
             pipeline.run(ctx)
+
+            # Step 4b: CFG → structured control flow. Recompute the
+            # dominator tree fresh here -- the one build_ssa used
+            # internally predates default_pipeline's block merges and no
+            # longer matches ctx.graph's current block list.
+            domtree = DominatorTree(ctx.graph)
+            domtree.compute()
+            CFGStructurer(ctx.graph, domtree).structure()
 
             # Step 5: SSA → C code
             generator = CCodeGenerator(ctx)

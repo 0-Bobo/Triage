@@ -141,6 +141,47 @@ class BlockGraph:
         return f"<BlockGraph {len(self.blocks)} blocks>"
 
 
+def _branch_target_addr(op: PcodeOp) -> int | None:
+    """Resolve a branch op's target address, in the same domain as `op.addr`.
+
+    `BRANCH`'s `.addr` holds its *target* (not its own source address --
+    see `Translator._translate_jump`), so it is returned directly.
+    `CBRANCH`'s target is the constant input wider than 4 bytes (the
+    existing matching rule, centralized here instead of duplicated between
+    `_find_boundaries` and `_connect`). Anything else (`BRANCHIND`, or no
+    match) has no statically-resolvable target.
+    """
+    if op.opcode is OpCode.BRANCH:
+        return op.addr
+    if op.opcode is OpCode.CBRANCH:
+        for inp in op.inputs:
+            if inp.is_constant() and inp.size > 4:
+                return inp.offset
+        return None
+    return None
+
+
+def find_if_merge(t: BasicBlock, f: BasicBlock) -> BasicBlock | None:
+    """Find where a two-way branch's arms (`t`, `f`) reconverge, if at all.
+
+    Handles both the classic if/else shape (both arms are separate body
+    blocks that flow into a third merge block) and the if/no-else shape
+    (one arm IS the merge block directly, with no separate body on that
+    arm) -- shared by `CFGStructurer._detect_if_else` and
+    `emit_c._emit_condition` so both agree on the same reconvergence point.
+    """
+    if t is f:
+        return None
+    common = set(t.succs) & set(f.succs)
+    if common:
+        return next(iter(common))
+    if t in f.succs:
+        return t
+    if f in t.succs:
+        return f
+    return None
+
+
 # ── CFG Builder ───────────────────────────────────────────────────────
 
 
@@ -173,16 +214,29 @@ class CFGBuilder:
         """Find all indices that are block boundaries (entry points)."""
         boundaries = {0}  # First op is always a boundary
 
+        # Address → op-list index, so branch targets (addresses) can be
+        # translated into the same index domain `_partition` compares
+        # against. `BRANCH` is excluded from contributing entries: its
+        # `.addr` holds a *target* address, not its own position, and if a
+        # `BRANCH` op were scanned before the real instruction starting at
+        # that same address, its (wrong) index would win the first-write-
+        # wins dict below and never get corrected.
+        addr_to_idx: dict[int, int] = {}
+        for i, op in enumerate(ops):
+            if op.addr not in addr_to_idx and op.opcode is not OpCode.BRANCH:
+                addr_to_idx[op.addr] = i
+
         for i, op in enumerate(ops):
             if op.is_branch or op.is_return:
                 # After a branch → new block
                 if i + 1 < len(ops):
                     boundaries.add(i + 1)
                 # Branch targets → new blocks
-                # In p-code, branch targets are constants
-                for inp in op.inputs:
-                    if inp.is_constant():
-                        boundaries.add(inp.offset)  # Simplified
+                target = _branch_target_addr(op)
+                if target is not None:
+                    idx = addr_to_idx.get(target)
+                    if idx is not None:
+                        boundaries.add(idx)
             if op.is_call:
                 # After any call → could be a boundary if tail call
                 pass
@@ -224,8 +278,8 @@ class CFGBuilder:
             if last_op.is_branch:
                 if last_op.opcode == OpCode.BRANCH:
                     # Unconditional branch → connect to target
-                    if last_op.inputs and last_op.inputs[0].is_constant():
-                        target_addr = last_op.inputs[0].offset
+                    target_addr = _branch_target_addr(last_op)
+                    if target_addr is not None:
                         target = addr_map.get(target_addr)
                         if target and target not in block.succs:
                             block.succs.append(target)
@@ -443,14 +497,12 @@ class CFGStructurer:
             if len(block.succs) == 2:
                 t = block.succs[0]
                 f = block.succs[1]
-                # Find merge point (block reachable from both paths)
-                t_succs = set(t.succs)
-                f_succs = set(f.succs)
-                merge = t_succs & f_succs
-                if merge:
+                # Find merge point (block reachable from both paths, incl.
+                # the no-else/asymmetric shape where one arm IS the merge)
+                merge = find_if_merge(t, f)
+                if merge is not None:
                     block.block_type = BlockType.CONDITION
-                    for m in merge:
-                        m.preds = [p for p in m.preds if p is not t or p is not f]
+                    merge.preds = [p for p in merge.preds if p is not t or p is not f]
 
     def _detect_loops(self):
         """Detect while/do-while loops from back-edges."""
