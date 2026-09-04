@@ -36,8 +36,33 @@ from triage_web.solvers import execute_solver, generate_solver, get_solver_list
 log = logging.getLogger("triage-web")
 
 # ── FastAPI App ────────────────────────────────────────────────────────
+
+# Localhost-only by default — this is a single-user local tool, not a
+# multi-tenant service, so there's no reason any other origin should be
+# able to read its API responses out of the box. Matches main()'s own
+# default bind (--port 8888). Set TRIAGE_CORS_ORIGINS (comma-separated,
+# or "*") to explicitly widen this for a non-default deployment.
+_DEFAULT_CORS_ORIGINS = ["http://localhost:8888", "http://127.0.0.1:8888"]
+
+
+def _cors_origins() -> list[str]:
+    """Allowed CORS origins: TRIAGE_CORS_ORIGINS (comma-separated) if set,
+    else the localhost-only default. Setting TRIAGE_CORS_ORIGINS is a
+    deliberate opt-in for a wider deployment."""
+    env = os.environ.get("TRIAGE_CORS_ORIGINS")
+    if not env:
+        return _DEFAULT_CORS_ORIGINS
+    return [o.strip() for o in env.split(",") if o.strip()]
+
+
 app = FastAPI(title="Triage Web", docs_url=None, redoc_url=None)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_methods=["*"], allow_headers=["*"])
+
+# Upload limits — TRIAGE_MAX_UPLOAD_BYTES matches the documented ~500MB
+# binary-size ceiling from PROJECT.md; reads happen in fixed-size chunks so
+# an oversized body is rejected mid-stream instead of fully buffered first.
+_MAX_UPLOAD_BYTES = int(os.environ.get("TRIAGE_MAX_UPLOAD_BYTES", str(500 * 1024 * 1024)))
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 @dataclass
@@ -102,6 +127,29 @@ def _size_to_next_function(loader: BinaryLoader, addr: int) -> int:
     return next_addr - addr
 
 
+def _safe_staged_upload_path(filename: str) -> str | None:
+    """Build the predictable staged-copy path for an uploaded ``filename``,
+    guaranteed to resolve inside ``tempfile.gettempdir()``.
+
+    The client-supplied filename is untrusted: normalize backslashes to
+    forward slashes and strip embedded NUL bytes first, so a plain
+    ``os.path.basename`` (which only recognizes the current OS's separator)
+    can't be defeated by a backslash-separated or NUL-embedded name on a
+    POSIX host. As a final backstop, resolve the joined path and confirm it
+    is still inside the temp directory — returns ``None`` if that check
+    ever fails, so the caller can skip the staged copy instead of writing
+    outside the intended directory.
+    """
+    normalized = filename.replace("\\", "/").replace("\x00", "")
+    safe_name = os.path.basename(normalized) or "upload"
+    dest = os.path.join(tempfile.gettempdir(), "triage_" + safe_name)
+    tempdir = Path(tempfile.gettempdir()).resolve()
+    resolved = Path(dest).resolve()
+    if not resolved.is_relative_to(tempdir):
+        return None
+    return dest
+
+
 # ── Health / Shutdown ─────────────────────────────────────────────────
 
 
@@ -139,20 +187,29 @@ async def api_load(path: str = Form(""), file: UploadFile = File(None)):
     if file and file.filename:
         ext = Path(file.filename).suffix
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-        content = await file.read()
-        tmp.write(content)
+        total = 0
+        while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+            total += len(chunk)
+            if total > _MAX_UPLOAD_BYTES:
+                tmp.close()
+                os.unlink(tmp.name)
+                raise HTTPException(413, f"Upload exceeds the {_MAX_UPLOAD_BYTES}-byte limit")
+            tmp.write(chunk)
         tmp.close()
         target = tmp.name
         original_name = file.filename
         # Copy to a predictable path so solver scripts can reference the file
-        dest = os.path.join(tempfile.gettempdir(), "triage_" + file.filename)
-        try:
-            import shutil
+        dest = _safe_staged_upload_path(file.filename)
+        if dest is not None:
+            try:
+                import shutil
 
-            shutil.copy2(target, dest)
-            target = dest
-        except Exception as e:
-            log.debug("could not stage upload at %s: %s — using temp path", dest, e)
+                shutil.copy2(target, dest)
+                target = dest
+            except Exception as e:
+                log.debug("could not stage upload at %s: %s — using temp path", dest, e)
+        else:
+            log.debug("rejected unsafe staged-upload filename: %r — using temp path", file.filename)
     elif path:
         if not os.path.isfile(path):
             raise HTTPException(400, f"File not found: {path}")

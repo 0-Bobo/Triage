@@ -141,6 +141,102 @@ def test_upload_staging_failure_falls_back_to_temp(app_client, monkeypatch, samp
     assert r.status_code == 200  # still loads from the NamedTemporaryFile path
 
 
+def test_upload_traversal_filename_is_sanitized_to_temp_basename(app_client, sample_path) -> None:
+    import tempfile
+    from pathlib import Path
+
+    staged = Path(tempfile.gettempdir()) / "triage_evil.bin"
+    staged.unlink(missing_ok=True)
+    try:
+        with open(sample_path, "rb") as fh:
+            r = app_client.post("/api/load", files={"file": ("../../../evil.bin", fh, "application/octet-stream")})
+        assert r.status_code == 200
+        assert staged.is_file()
+    finally:
+        # release the mmap'd handle on the staged file before unlinking (Windows)
+        if server._session.loader is not None:
+            server._session.loader.close()
+        staged.unlink(missing_ok=True)
+
+
+def test_safe_staged_upload_path_resolves_a_traversal_name_inside_tempdir() -> None:
+    import tempfile
+    from pathlib import Path
+
+    dest = server._safe_staged_upload_path("../../../evil.bin")
+    assert dest is not None
+    tempdir = Path(tempfile.gettempdir()).resolve()
+    assert Path(dest).resolve().is_relative_to(tempdir)
+
+
+def test_safe_staged_upload_path_rejects_a_bypassed_basename(monkeypatch) -> None:
+    import os as _os
+
+    # Three ".." segments: one is absorbed by the "triage_" prefix on the first
+    # joined component, the other two pop back past the temp directory itself —
+    # proving the resolve-based guard independently blocks the escape even if
+    # os.path.basename were ever bypassed by a future refactor.
+    escape = _os.sep.join([".."] * 3) + _os.sep + "evil.bin"
+    monkeypatch.setattr(_os.path, "basename", lambda _p: escape)
+    assert server._safe_staged_upload_path("evil.bin") is None
+
+
+def test_load_skips_staged_copy_when_helper_rejects_the_filename(app_client, monkeypatch, sample_path) -> None:
+    monkeypatch.setattr(server, "_safe_staged_upload_path", lambda _filename: None)
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 200
+    assert server._session.loader is not None
+
+
+# ── CORS ──────────────────────────────────────────────────────────────
+
+
+def test_cors_preflight_from_a_disallowed_origin_is_rejected(app_client: TestClient) -> None:
+    r = app_client.options(
+        "/api/health",
+        headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"},
+    )
+    assert r.status_code == 400
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_cors_preflight_from_the_default_localhost_origin_is_allowed(app_client: TestClient) -> None:
+    r = app_client.options(
+        "/api/health",
+        headers={"Origin": "http://localhost:8888", "Access-Control-Request-Method": "GET"},
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:8888"
+
+
+def test_cors_origins_defaults_to_localhost_when_env_unset(monkeypatch) -> None:
+    monkeypatch.delenv("TRIAGE_CORS_ORIGINS", raising=False)
+    assert server._cors_origins() == server._DEFAULT_CORS_ORIGINS
+
+
+def test_cors_origins_honors_the_env_override(monkeypatch) -> None:
+    monkeypatch.setenv("TRIAGE_CORS_ORIGINS", "https://a.example, https://b.example")
+    assert server._cors_origins() == ["https://a.example", "https://b.example"]
+
+
+# ── Upload size limit ─────────────────────────────────────────────────
+
+
+def test_upload_under_the_limit_still_loads(app_client, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 200
+
+
+def test_upload_over_the_limit_is_rejected_with_413(app_client, monkeypatch, sample_path) -> None:
+    monkeypatch.setattr(server, "_MAX_UPLOAD_BYTES", 16)
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 413
+    assert "16" in r.json()["detail"]
+
+
 def test_exploit_techniques_maps_pe_imports(app_client, pe_path) -> None:
     app_client.post("/api/load", data={"path": str(pe_path)})
     body = app_client.get("/api/exploit-techniques").json()
