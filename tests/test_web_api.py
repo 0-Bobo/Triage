@@ -10,7 +10,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from triage_web import server
+from triage_web import analysis, server
+from triage_web.loader import BinaryLoader
+from triage_web.rop import ROPEngine
 
 pytestmark = pytest.mark.integration
 
@@ -214,6 +216,26 @@ def test_solver_generation_and_listing(client: TestClient) -> None:
     gen = client.get("/api/solver", params={"solver_type": "static_string_reconstruct"}).json()
     assert gen["type"] == "static_string_reconstruct"
     compile(gen["code"], "<api/solver>", "exec")
+
+
+def test_solver_ret2libc_wiring_matches_independent_recompute(client: TestClient, sample_path) -> None:
+    """/api/solver?solver_type=ret2libc bakes in the same pop_rdi ROPEngine.scan()
+    independently finds for this sample, and falls back to the documented OFFSET
+    constant since this sample has no BOF sink (no overflow site)."""
+    resp = client.get("/api/solver", params={"solver_type": "ret2libc"})
+    assert resp.status_code == 200
+    code = resp.json()["code"]
+    compile(code, "<api/solver:ret2libc>", "exec")
+
+    ldr = BinaryLoader(str(sample_path))
+    try:
+        gadgets = analysis.scan_gadgets(ROPEngine(ldr))
+    finally:
+        ldr.close()
+
+    expected_pop_rdi = int(gadgets["pop rdi; ret"], 16)
+    assert f"POP_RDI = {hex(expected_pop_rdi)}" in code
+    assert "OFFSET  = 64" in code
 
 
 def test_rop_scan_then_search(client: TestClient) -> None:

