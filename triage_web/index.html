@@ -14,7 +14,7 @@
 :root {
   --bg: #15161a; --bg2: #101116; --mantle: #191a1f; --surface: #202127; --surface-hover: #292b33;
   --border: #30323a; --border-bright: #444650;
-  --text: #d6d8de; --text-dim: #9296a0; --text-muted: #63666f;
+  --text: #d6d8de; --text-dim: #9296a0; --text-muted: #868a93;
   /* one functional accent + status colours that mean something */
   --accent: #e0932f; --accent-dim: #b9761f; --accent-soft: rgba(224,147,47,.14);
   --cyan: #6aa0c8; --cyan-dim: #4d7d9f; --blue: #6aa0c8; --violet: #9a8fc0;
@@ -214,6 +214,9 @@ input::placeholder { color:var(--text-muted); }
   .sidebar button .lbl { display:none; }
   .stat-grid { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); }
 }
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) { .panel-enter { animation:none; } .spin { animation:none; } .statusbar .indicator.busy { animation:none; } }
 </style>
 </head>
 <body>
@@ -222,21 +225,21 @@ input::placeholder { color:var(--text-muted); }
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="logo-box">Tg</div>
-    <button data-panel="auto" id="nav-auto"><span class="ico">&#9889;</span><span class="lbl">Auto</span></button>
+    <button data-panel="auto" id="nav-auto" aria-label="Auto"><span class="ico">&#9889;</span><span class="lbl">Auto</span></button>
     <div class="sep"></div>
-    <button class="active" data-panel="info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
-    <button data-panel="functions"><span class="ico">&#402;</span><span class="lbl">Funcs</span></button>
-    <button data-panel="code"><span class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
-    <button data-panel="disasm"><span class="ico">&#9776;</span><span class="lbl">Asm</span></button>
-    <button data-panel="hex"><span class="ico">#</span><span class="lbl">Hex</span></button>
-    <button data-panel="imports"><span class="ico">&larr;</span><span class="lbl">Data</span></button>
+    <button class="active" data-panel="info" aria-label="Info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
+    <button data-panel="functions" aria-label="Functions"><span class="ico">&#402;</span><span class="lbl">Funcs</span></button>
+    <button data-panel="code" aria-label="Decompiled Code"><span class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
+    <button data-panel="disasm" aria-label="Disassembly"><span class="ico">&#9776;</span><span class="lbl">Asm</span></button>
+    <button data-panel="hex" aria-label="Hex Viewer"><span class="ico">#</span><span class="lbl">Hex</span></button>
+    <button data-panel="imports" aria-label="Data"><span class="ico">&larr;</span><span class="lbl">Data</span></button>
     <div class="sep"></div>
-    <button data-panel="exploit"><span class="ico">!</span><span class="lbl">Exploit</span></button>
-    <button data-panel="capa"><span class="ico">C</span><span class="lbl">CAPA</span></button>
-    <button data-panel="xrefs"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
+    <button data-panel="exploit" aria-label="Exploit"><span class="ico">!</span><span class="lbl">Exploit</span></button>
+    <button data-panel="capa" aria-label="CAPA"><span class="ico">C</span><span class="lbl">CAPA</span></button>
+    <button data-panel="xrefs" aria-label="Cross References"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
     <div class="spacer"></div>
-    <button onclick="quitServer()"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
-    <button data-panel="about"><span class="ico">?</span><span class="lbl">About</span></button>
+    <button onclick="quitServer()" aria-label="Quit"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
+    <button data-panel="about" aria-label="About"><span class="ico">?</span><span class="lbl">About</span></button>
   </div>
 
   <!-- Content area -->
@@ -291,7 +294,7 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Functions ===== -->
       <div class="panel" id="panel-functions">
         <div class="tb">
-          <input placeholder="Search functions..." id="func-search" oninput="loadFunctions(this.value)" style="width:100%">
+          <input placeholder="Search functions..." id="func-search" oninput="loadFunctions(this.value)" style="width:100%" aria-label="Search functions">
           <span class="v" id="func-count"></span>
         </div>
         <div class="scroll">
@@ -303,7 +306,7 @@ input::placeholder { color:var(--text-muted); }
       <div class="panel code-panel" id="panel-code">
         <div style="width:200px;min-width:180px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
           <div class="tb" style="padding:4px 6px">
-            <input placeholder="Search funcs..." id="code-func-search" oninput="loadCodeFunctions(this.value)" style="width:100%;font-size:10px">
+            <input placeholder="Search funcs..." id="code-func-search" oninput="loadCodeFunctions(this.value)" style="width:100%;font-size:10px" aria-label="Search functions">
           </div>
           <div class="scroll" id="code-func-list" style="flex:1;overflow-y:auto;font-size:10px">
             <div style="padding:20px;text-align:center;color:var(--text-muted)">No functions loaded</div>
@@ -333,7 +336,7 @@ input::placeholder { color:var(--text-muted); }
       <div class="panel" id="panel-disasm">
         <div class="tb">
           <span style="color:var(--text-dim);font-size:11px">Address</span>
-          <input placeholder="0x..." value="0x0" id="disasm-addr" style="width:130px">
+          <input placeholder="0x..." value="0x0" id="disasm-addr" style="width:130px" aria-label="Address to disassemble">
           <button class="btn btn-primary" onclick="loadDisasm()">Go</button>
           <span class="v" id="disasm-count"></span>
           <div class="sep"></div>
@@ -347,12 +350,12 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Hex ===== -->
       <div class="panel" id="panel-hex">
         <div class="tb hx-tb">
-          <button class="btn" id="hx-mode" title="toggle file-offset / virtual-address">offset</button>
-          <input class="mono" placeholder="0x0" id="hx-goto" style="width:110px">
+          <button class="btn" id="hx-mode" title="toggle file-offset / virtual-address" aria-label="Toggle offset / virtual-address mode">offset</button>
+          <input class="mono" placeholder="0x0" id="hx-goto" style="width:110px" aria-label="Go to address">
           <button class="btn btn-primary" onclick="hxGo()">Go</button>
           <span class="sep"></span>
-          <button class="btn" onclick="hxPage(-1)" title="prev page (PgUp)">&#9664;</button>
-          <button class="btn" onclick="hxPage(1)" title="next page (PgDn)">&#9654;</button>
+          <button class="btn" onclick="hxPage(-1)" title="prev page (PgUp)" aria-label="Previous page">&#9664;</button>
+          <button class="btn" onclick="hxPage(1)" title="next page (PgDn)" aria-label="Next page">&#9654;</button>
           <select class="btn" id="hx-size" onchange="hxLoad({off:HX.off})">
             <option>256</option><option selected>512</option><option>1024</option><option>4096</option>
           </select>
@@ -361,9 +364,9 @@ input::placeholder { color:var(--text-muted); }
             <option value="">&sect; section&hellip;</option>
           </select>
           <span class="sep"></span>
-          <input class="mono" id="hx-find" placeholder="hex: 41 42  ·  str: flag" style="width:190px">
-          <button class="btn" onclick="hxFind(1)" title="find next (Enter)">&#9207;</button>
-          <button class="btn" onclick="hxFind(-1)" title="find prev (Shift+Enter)">&#9206;</button>
+          <input class="mono" id="hx-find" placeholder="hex: 41 42  ·  str: flag" style="width:190px" aria-label="Find hex bytes or string">
+          <button class="btn" onclick="hxFind(1)" title="find next (Enter)" aria-label="Find next">&#9207;</button>
+          <button class="btn" onclick="hxFind(-1)" title="find prev (Shift+Enter)" aria-label="Find previous">&#9206;</button>
           <span class="v" id="hx-find-n"></span>
         </div>
         <div class="hx">
@@ -404,7 +407,7 @@ input::placeholder { color:var(--text-muted); }
           <button data-sub="sec" onclick="sub('imports','sec')">Sections</button>
         </div>
         <div class="subview on" data-sub="imp">
-          <div class="tb"><input placeholder="Search imports..." id="imps-search" oninput="loadImports()" style="width:100%"><span class="v" id="imps-count"></span></div>
+          <div class="tb"><input placeholder="Search imports..." id="imps-search" oninput="loadImports()" style="width:100%" aria-label="Search imports"><span class="v" id="imps-count"></span></div>
           <div class="scroll"><table class="dtable" id="imp-tbl"><thead><tr><th>Name</th><th>Library</th><th>Risk</th></tr></thead><tbody id="imp-tbody"></tbody></table></div>
         </div>
         <div class="subview" data-sub="exp">
@@ -414,7 +417,7 @@ input::placeholder { color:var(--text-muted); }
           <div class="scroll"><table class="dtable" id="sym-tbl"><thead><tr><th>Name</th><th>Address</th><th>Type</th><th>Binding</th></tr></thead><tbody id="sym-tbody"></tbody></table></div>
         </div>
         <div class="subview" data-sub="str">
-          <div class="tb"><input placeholder="Search strings..." id="str-search" oninput="loadStrings()" style="width:100%"><span class="v" id="str-count"></span></div>
+          <div class="tb"><input placeholder="Search strings..." id="str-search" oninput="loadStrings()" style="width:100%" aria-label="Search strings"><span class="v" id="str-count"></span></div>
           <div class="scroll" id="str-container" style="padding:4px 10px;font-family:var(--font-mono);font-size:11px"></div>
         </div>
         <div class="subview" data-sub="sec">
@@ -442,7 +445,7 @@ input::placeholder { color:var(--text-muted); }
           <div class="tb">
             <button class="btn btn-primary" onclick="scanROP()" id="rop-scan-btn">&#8635; Scan</button>
             <span class="v" id="rop-status">Not scanned</span><div class="sep"></div>
-            <input placeholder="Search gadgets..." id="rop-query" style="width:160px" oninput="searchROP()">
+            <input placeholder="Search gadgets..." id="rop-query" style="width:160px" oninput="searchROP()" aria-label="Search ROP gadgets">
             <select id="rop-class" onchange="searchROP()"><option value="">All classes</option></select>
           </div>
           <div class="scroll"><table class="dtable"><thead><tr><th>Address</th><th>Gadget</th><th>Classes</th></tr></thead><tbody id="rop-tbody"></tbody></table></div>
@@ -484,7 +487,7 @@ input::placeholder { color:var(--text-muted); }
       <div class="panel" id="panel-xrefs">
         <div class="tb">
           <span style="color:var(--text-dim);font-size:11px">Address</span>
-          <input placeholder="0x..." value="0x0" id="xref-addr" style="width:130px">
+          <input placeholder="0x..." value="0x0" id="xref-addr" style="width:130px" aria-label="Address to look up cross references">
           <button class="btn btn-primary" onclick="loadXrefs()">Look Up</button>
           <button class="btn" onclick="buildXrefs()">Build Range</button>
           <span class="v" id="xref-status"></span>
@@ -527,22 +530,25 @@ let loaded = false;
 let state = {};
 
 // ── Navigation ─────────────────────────────────────────────────────────
-document.querySelectorAll('.sidebar button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.panel').forEach(p => {
-      p.classList.remove('active');
-      p.classList.remove('panel-enter');
-    });
-    const id = 'panel-' + btn.dataset.panel;
-    const panel = document.getElementById(id);
-    panel.classList.add('active');
-    panel.classList.add('panel-enter');
-    const fn = 'onShow' + btn.dataset.panel.charAt(0).toUpperCase() + btn.dataset.panel.slice(1);
-    if (window[fn]) window[fn]();
+function activatePanel(name, opts) {
+  const panel = document.getElementById('panel-' + name);
+  if (!panel) return;
+  document.querySelectorAll('.sidebar button').forEach(b => b.classList.toggle('active', b.dataset.panel === name));
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.remove('active');
+    p.classList.remove('panel-enter');
   });
+  panel.classList.add('active');
+  panel.classList.add('panel-enter');
+  if (!opts || opts.push !== false) history.pushState(null, '', '#' + name);
+  const fn = 'onShow' + name.charAt(0).toUpperCase() + name.slice(1);
+  if (window[fn]) window[fn]();
+}
+document.querySelectorAll('.sidebar button').forEach(btn => {
+  btn.addEventListener('click', () => activatePanel(btn.dataset.panel));
 });
+window.addEventListener('hashchange', () => activatePanel(location.hash.slice(1), { push: false }));
+if (location.hash.length > 1) activatePanel(location.hash.slice(1), { push: false });
 
 // ── Sub-navigation inside merged panels ──────────────────────────────
 const SUB_ONSHOW = {

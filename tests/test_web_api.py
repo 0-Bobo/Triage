@@ -43,6 +43,58 @@ def test_index_serves_the_spa_uncached() -> None:
     assert "<!DOCTYPE html>" in resp.text
 
 
+def test_index_text_muted_meets_contrast_and_respects_reduced_motion() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "--text-muted: #868a93;" in resp.text
+    assert "--text-muted: #63666f;" not in resp.text
+    assert "@media (prefers-reduced-motion: reduce)" in resp.text
+    assert ".panel-enter { animation:none; }" in resp.text
+    assert ".spin { animation:none; }" in resp.text
+    assert ".statusbar .indicator.busy { animation:none; }" in resp.text
+
+
+def test_index_has_accessible_labels_on_icon_only_controls() -> None:
+    resp = TestClient(server.app).get("/")
+    assert resp.text.count('aria-label="') == 26
+    labels = (
+        "Auto",
+        "Info",
+        "Functions",
+        "Decompiled Code",
+        "Disassembly",
+        "Hex Viewer",
+        "Data",
+        "Exploit",
+        "CAPA",
+        "Cross References",
+        "Quit",
+        "About",
+        "Toggle offset / virtual-address mode",
+        "Previous page",
+        "Next page",
+        "Find next",
+        "Find previous",
+        "Search functions",
+        "Address to disassemble",
+        "Go to address",
+        "Find hex bytes or string",
+        "Search ROP gadgets",
+        "Search strings",
+        "Search imports",
+        "Address to look up cross references",
+    )
+    for label in labels:
+        assert f'aria-label="{label}"' in resp.text
+
+
+def test_index_wires_hash_based_panel_routing() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "function activatePanel(" in resp.text
+    assert "if (!panel) return;" in resp.text
+    assert "history.pushState(null, '', '#' + name);" in resp.text
+    assert "addEventListener('hashchange'" in resp.text
+
+
 def test_read_endpoint_requires_a_loaded_binary(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server._session, "loader", None)
     resp = TestClient(server.app).get("/api/functions")
