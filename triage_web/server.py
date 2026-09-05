@@ -1191,9 +1191,12 @@ def main():  # pragma: no cover - CLI entry point, starts uvicorn
 
     parser = argparse.ArgumentParser(description="Triage Web — CTF Binary Analysis Workbench")
     parser.add_argument("binary", nargs="?", help="Path to binary to load")
-    # Binds all interfaces by default so a CTF team on the LAN can reach it;
-    # pass --host 127.0.0.1 to restrict.
-    parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")  # noqa: S104
+    # Localhost-only by default: /api/solver/execute runs arbitrary
+    # client-supplied Python as a subprocess and /api/load reads any local
+    # path, both with no authentication, so exposing this beyond loopback is
+    # an explicit opt-in. Pass --host 0.0.0.0 (or a LAN IP) to widen it, e.g.
+    # to share with a CTF team on a trusted network.
+    parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8888, help="Port (default: 8888)")
     args = parser.parse_args()
 
@@ -1218,6 +1221,13 @@ def main():  # pragma: no cover - CLI entry point, starts uvicorn
 
     import uvicorn
 
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning(
+            "Binding to %s exposes this server beyond localhost. It has no "
+            "authentication and /api/solver/execute runs arbitrary client-"
+            "supplied code — only do this on a network you trust.",
+            args.host,
+        )
     log.info(f"Starting server at http://{args.host}:{args.port}")
     print(f"\n  \033[1;36mTriage  http://localhost:{args.port}\033[0m\n")
     # Plain host/port bind — portable across Linux and Windows. (An earlier
