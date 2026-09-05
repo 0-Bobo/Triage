@@ -78,6 +78,29 @@ def test_load_via_file_upload(app_client: TestClient, sample_path) -> None:
     assert server._session.loader is not None
 
 
+# ── /api/unload ───────────────────────────────────────────────────────
+
+
+def test_unload_clears_the_session(app_client: TestClient, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert server._session.loader is not None
+
+    r = app_client.post("/api/unload")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+    assert server._session.loader is None
+
+    r = app_client.get("/api/info")
+    assert r.status_code == 400
+
+
+def test_unload_with_nothing_loaded_is_a_no_op(app_client: TestClient) -> None:
+    r = app_client.post("/api/unload")
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
 def test_load_wraps_a_loader_failure_as_500(app_client: TestClient, monkeypatch, tmp_path) -> None:
     f = tmp_path / "x.bin"
     f.write_bytes(b"\x7fELF...")

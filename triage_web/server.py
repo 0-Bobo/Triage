@@ -237,6 +237,13 @@ async def api_load(path: str = Form(""), file: UploadFile = File(None)):
         raise HTTPException(500, f"Load failed: {e}") from e
 
 
+@app.post("/api/unload")
+def api_unload():
+    """Release the currently loaded binary and free its analysis backends."""
+    _session.reset()
+    return {"status": "ok"}
+
+
 # ── Info ──────────────────────────────────────────────────────────────
 
 
