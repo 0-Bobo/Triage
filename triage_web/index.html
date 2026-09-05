@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Triage — Binary Analysis Workbench</title>
+<title>Triage</title>
 <style>
 /* Geist Sans / Geist Mono — Vercel, SIL Open Font License 1.1.
    Embedded as base64 data URIs (not linked) so the page stays a single
@@ -42,7 +42,7 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; line-height:1.6; -webkit-font-smoothing:antialiased; }
-::selection { background:var(--accent-soft); color:var(--text); }
+::selection { background:rgba(244,244,244,.32); color:#0b0b0b; }
 ::-webkit-scrollbar { width:10px; height:10px; }
 ::-webkit-scrollbar-track { background:var(--bg2); }
 ::-webkit-scrollbar-thumb { background:var(--border-bright); border:2px solid var(--bg2); }
@@ -54,7 +54,8 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 /* ── Sidebar ────────────────────────────────────────────── */
 .sidebar { width:var(--sidebar-w); background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:stretch; padding:8px 6px; gap:2px; flex-shrink:0; z-index:10; }
-.sidebar .logo-box { height:30px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--text); margin-bottom:6px; border-bottom:1px solid var(--border); }
+.sidebar .logo-box { height:30px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); margin-bottom:6px; border-bottom:1px solid var(--border); }
+.sidebar .logo-box svg { width:17px; height:17px; }
 .sidebar button { position:relative; height:44px; border:none; background:transparent; color:var(--text-muted); cursor:pointer; font-size:8.5px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; padding:0 1px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; transition:color .1s, background .1s; }
 .sidebar button .ico { font-size:13px; line-height:1; opacity:.85; }
 .sidebar button:hover { color:var(--text); background:var(--surface); }
@@ -113,7 +114,8 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 
 /* ── Auto-solve panel (framed console, no glow) ─────────── */
 #panel-auto .hero { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:28px 26px 20px; max-width:640px;
-  background-image:radial-gradient(var(--border) 1px, transparent 1px); background-size:18px 18px; }
+  background-image:linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size:24px 24px; background-position:-1px -1px; }
 #panel-auto .prompt { font-family:var(--font-mono); font-size:11px; color:var(--green); }
 #panel-auto .prompt .op { color:var(--text-muted); }
 #panel-auto .hero .desc { font-size:12.5px; color:var(--text-dim); line-height:1.6; }
@@ -198,15 +200,34 @@ input::placeholder { color:var(--text-muted); }
 .stat .val { font-size:19px; font-weight:600; letter-spacing:0; }
 
 /* ── Empty state ────────────────────────────────────────── */
-.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:6px; color:var(--text-dim); padding:44px;
-  background-image:radial-gradient(var(--border) 1px, transparent 1px); background-size:18px 18px; }
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:6px; color:var(--text-dim); padding:44px; position:relative;
+  background-image:linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size:24px 24px; background-position:-1px -1px; }
 .empty-state .ico { font-size:32px; opacity:.25; }
 .empty-state .big { font-size:13px; color:var(--text-dim); font-weight:500; }
 .empty-state .sub { font-size:11px; }
+/* corner reticle ticks — echoes the sidebar mark, frames the empty content
+   like a viewfinder rather than a decorative dot-grid */
+.empty-state::before, .empty-state::after { content:''; position:absolute; width:14px; height:14px; pointer-events:none; }
+.empty-state::before { top:14px; left:14px; border-top:1px solid var(--border-bright); border-left:1px solid var(--border-bright); }
+.empty-state::after { bottom:14px; right:14px; border-bottom:1px solid var(--border-bright); border-right:1px solid var(--border-bright); }
 
 /* ── Loading spinner ────────────────────────────────────── */
 .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border-bright); border-top-color:var(--accent); animation:spin .7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── Skeleton copy button (visible, not a near-invisible overlay) ── */
+.skel-copy { position:absolute; right:6px; top:6px; font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; padding:3px 8px; background:var(--surface); border:1px solid var(--border-bright); border-radius:var(--radius); color:var(--text-dim); cursor:pointer; }
+.skel-copy:hover { background:var(--surface-hover); color:var(--text); }
+
+/* ── Confirm dialog (the second thing that genuinely floats — replaces
+   the native browser confirm() so quitting stays in the app's voice) ── */
+#confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1000; display:none; align-items:center; justify-content:center; }
+#confirm-overlay.show { display:flex; }
+.confirm-box { width:340px; background:var(--mantle); border:1px solid var(--border-bright); border-radius:var(--radius); }
+.confirm-box .term-bar { cursor:default; }
+.confirm-box .confirm-body { padding:16px; font-size:12px; color:var(--text-dim); line-height:1.6; }
+.confirm-box .confirm-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 16px 16px; }
 
 /* ── Toast (the one thing that genuinely floats) ────────── */
 #toast { position:fixed; bottom:14px; right:14px; background:var(--surface); border:1px solid var(--border-bright); border-left:2px solid var(--text-dim); padding:9px 14px; font-size:11.5px; max-width:380px; z-index:999; display:none; border-radius:var(--radius); }
@@ -243,6 +264,15 @@ input::placeholder { color:var(--text-muted); }
 .statusbar .indicator.busy { background:var(--yellow); animation:glow-pulse 1s infinite; }
 .tcursor { display:inline-block; width:6px; height:11px; background:var(--accent); margin-left:3px; vertical-align:-2px; animation:cursor-blink 1s step-end infinite; }
 
+/* ── About panel ────────────────────────────────────────── */
+.about-wrap { max-width:640px; margin:0 auto; padding:40px 26px; overflow:auto; }
+.about-caps { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); margin:18px 0; }
+.about-caps div { background:var(--surface); padding:10px 12px; font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:7px; }
+.about-caps div .ico { color:var(--accent); font-family:var(--font-mono); }
+.about-keys { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:6px 0 18px; }
+.about-keys kbd { background:var(--surface); border:1px solid var(--border-bright); border-radius:3px; padding:1px 6px; color:var(--text); font-size:10px; }
+.about-section-lbl { font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.8px; font-weight:600; margin:0 0 8px; }
+
 /* ── Responsive tweaks ──────────────────────────────────── */
 @media (max-width:768px) {
   :root { --sidebar-w: 44px; }
@@ -259,7 +289,13 @@ input::placeholder { color:var(--text-muted); }
 
   <!-- Sidebar -->
   <div class="sidebar">
-    <div class="logo-box">Tg</div>
+    <div class="logo-box" title="Triage" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+        <path d="M4 9V6a2 2 0 0 1 2-2h3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/>
+        <path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M9 20H6a2 2 0 0 1-2-2v-3"/>
+        <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>
+    </div>
     <button data-panel="auto" id="nav-auto" aria-label="Auto"><span class="ico">&#9889;&#xFE0E;</span><span class="lbl">Auto</span></button>
     <div class="sep"></div>
     <button class="active" data-panel="info" aria-label="Info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
@@ -289,6 +325,7 @@ input::placeholder { color:var(--text-muted); }
       <button class="btn" onclick="document.getElementById('file-input').click()">Open</button>
       <input type="file" id="file-input" style="display:none" onchange="handleFile(event)">
       <button class="btn" onclick="showLoadDialog()">Load</button>
+      <button class="btn" id="unload-btn" onclick="unloadBinary()" disabled title="Unload the current binary">Unload</button>
     </div>
 
     <!-- Panels container -->
@@ -481,7 +518,7 @@ input::placeholder { color:var(--text-muted); }
         </div>
         <div class="subview" data-sub="paths">
           <div class="tb"><button class="btn btn-primary" onclick="loadExploitPaths(this)">&#9889;&#xFE0E; Analyze Paths</button><span class="v" id="exploit-status">Click to analyze exploit primitives</span></div>
-          <div class="scroll" style="padding:10px" id="exploit-container"></div>
+          <div class="scroll" style="padding:10px"><div style="max-width:760px" id="exploit-container"></div></div>
         </div>
         <div class="subview" data-sub="rop">
           <div class="tb">
@@ -494,16 +531,7 @@ input::placeholder { color:var(--text-muted); }
         </div>
         <div class="subview" data-sub="solver">
           <div class="tb">
-            <select id="solver-type" style="flex:1;max-width:220px">
-              <option value="angr_find_flag">angr &mdash; Find Flag</option>
-              <option value="z3_constraint_solve">Z3 &mdash; Constraint Solve</option>
-              <option value="static_string_reconstruct">Static &mdash; String Reconstruct</option>
-              <option value="overflow_exploit">pwn &mdash; ret2win / BOF</option>
-              <option value="ret2libc">pwn &mdash; ret2libc</option>
-              <option value="rop_execve_chain">pwn &mdash; ROP execve</option>
-              <option value="shellcode_exploit">pwn &mdash; Shellcode Injection</option>
-              <option value="format_string_exploit">pwn &mdash; Format String</option>
-            </select>
+            <select id="solver-type" style="flex:1;max-width:220px"></select>
             <button class="btn btn-primary" onclick="runSolver(this)" id="solver-btn">Generate</button>
             <button class="btn" onclick="executeSolver(this)" id="exec-btn" disabled>Run</button>
             <span class="v" id="solver-status"></span>
@@ -556,10 +584,51 @@ input::placeholder { color:var(--text-muted); }
 
       <!-- ===== About ===== -->
       <div class="panel" id="panel-about">
-        <div class="empty-state" style="gap:3px">
-          <div style="font-size:20px;color:var(--text);font-weight:700;font-family:var(--font-display);letter-spacing:-.5px">Triage</div>
-          <div style="font-size:11px">CTF Binary Analysis Workbench &mdash; Web Edition</div>
-          <div style="font-size:10px;margin-top:8px;color:var(--text-muted)">Capstone &bull; pyelftools &bull; pefile &bull; LIEF &bull; CAPA</div>
+        <div class="about-wrap">
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="square" aria-hidden="true">
+              <path d="M4 9V6a2 2 0 0 1 2-2h3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/>
+              <path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M9 20H6a2 2 0 0 1-2-2v-3"/>
+              <circle cx="12" cy="12" r="1.6" fill="var(--accent)" stroke="none"/>
+            </svg>
+            <div>
+              <div style="font-size:19px;color:var(--text);font-weight:700;font-family:var(--font-display);letter-spacing:-.5px">Triage</div>
+              <div style="font-size:11px;color:var(--text-muted)">CTF binary-analysis workbench</div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.65;margin-top:16px">
+            A local workbench for CTF reverse-engineering and pwn. Load an ELF or PE and get
+            disassembly, a pseudo-C decompiler, cross-references, ROP gadgets, entropy/packer
+            checks, capa capabilities, and ranked exploit primitives &mdash; plus <b style="color:var(--text)">autopwn</b>,
+            which classifies the target and runs solver strategies in priority order until one lands a flag.
+          </div>
+
+          <div class="about-section-lbl" style="margin-top:22px">Capabilities</div>
+          <div class="about-caps">
+            <div><span class="ico">{&#160;}</span>Pseudo-C decompiler</div>
+            <div><span class="ico">&#9776;</span>Disassembly</div>
+            <div><span class="ico">#</span>Hex viewer</div>
+            <div><span class="ico">&#8596;</span>Cross-references</div>
+            <div><span class="ico">!</span>ROP gadget search</div>
+            <div><span class="ico">C</span>CAPA capabilities</div>
+            <div><span class="ico">&#9889;&#xFE0E;</span>Autopwn strategies</div>
+            <div><span class="ico">&larr;</span>Imports / strings / sections</div>
+          </div>
+
+          <div class="about-section-lbl">Hex viewer shortcuts</div>
+          <div class="about-keys">
+            <span><kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&larr;</kbd> <kbd>&rarr;</kbd></span><span>Move cursor</span>
+            <span><kbd>PgUp</kbd> <kbd>PgDn</kbd></span><span>Previous / next page</span>
+            <span><kbd>Home</kbd> <kbd>End</kbd></span><span>Jump to start / end</span>
+            <span><kbd>/</kbd></span><span>Focus find</span>
+          </div>
+
+          <div class="about-section-lbl">Built on</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:18px">Capstone &bull; pyelftools &bull; pefile &bull; LIEF &bull; CAPA</div>
+
+          <div style="font-size:10.5px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:12px">
+            MIT licensed &bull; <a href="https://github.com/0-Bobo/Triage" target="_blank" rel="noopener" style="color:var(--cyan);text-decoration:none">github.com/0-Bobo/Triage</a>
+          </div>
         </div>
       </div>
     </div>
@@ -573,11 +642,34 @@ input::placeholder { color:var(--text-muted); }
   </div>
 </div>
 <div id="toast"></div>
+<div id="confirm-overlay" role="presentation">
+  <div class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-desc">
+    <div class="term-bar"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span><span class="term-title" id="confirm-title">shutdown</span></div>
+    <div class="confirm-body" id="confirm-desc">Shut down the Triage server? This ends the session for every connected client — you'll need to restart it from the terminal to come back.</div>
+    <div class="confirm-actions">
+      <button class="btn" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok">Shut down</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────
 let loaded = false;
 let state = {};
+
+// ── Solver types (fetched once — single source of truth is solvers.py's
+// SOLVER_LIST via /api/solvers, so the dropdown never drifts from what the
+// backend can actually generate) ────────────────────────────────────────
+async function loadSolverTypes() {
+  try {
+    const r = await fetch('/api/solvers');
+    const data = await r.json();
+    const sel = document.getElementById('solver-type');
+    sel.innerHTML = (data.solvers || []).map(s => '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>').join('');
+  } catch (e) { /* solver tab just shows an empty select; Generate will surface the real error */ }
+}
+loadSolverTypes();
 
 // ── Navigation ─────────────────────────────────────────────────────────
 function activatePanel(name, opts) {
@@ -730,6 +822,21 @@ function setStatus(t, busy) {
 // ── File / Load ────────────────────────────────────────────────────────
 function showLoadDialog() { const p = prompt('Absolute path to binary:'); if (p) loadBinary(p); }
 
+async function unloadBinary() {
+  if (!loaded) return;
+  try { await fetch('/api/unload', { method: 'POST' }); } catch (e) { /* best-effort — reset the UI regardless */ }
+  loaded = false; state = {};
+  document.getElementById('conn-dot').className = 'dot';
+  document.getElementById('header-path').textContent = '— no binary loaded';
+  document.getElementById('unload-btn').disabled = true;
+  document.getElementById('info-empty').style.display = '';
+  document.getElementById('info-content').style.display = 'none';
+  resetPanels();
+  activatePanel('info');
+  toast('Binary unloaded', 'ok');
+  setStatus('Ready');
+}
+
 async function handleFile(ev) {
   const f = ev.target.files[0]; if (!f) return;
   const fd = new FormData(); fd.append('file', f);
@@ -796,6 +903,7 @@ async function _load(url, opts) {
     loaded = true; state.info = d.info; state.filename = d.filename || undefined;
     document.getElementById('conn-dot').className = 'dot online';
     document.getElementById('header-path').textContent = '\u2014 ' + (state.filename || d.info.path);
+    document.getElementById('unload-btn').disabled = false;
     document.getElementById('info-empty').style.display = 'none';
     document.getElementById('info-content').style.display = 'block';
     renderInfo();
@@ -1355,6 +1463,27 @@ function getMnemonicColor(m) {
 }
 
 // ── Exploit ────────────────────────────────────────────────────────────
+// Maps an attack-path's `name` (server.py's vuln-hints path builder) to the
+// solver_type this app can actually generate a runnable script for. Paths
+// with no entry here (e.g. "Defeat the stack canary first", which has no
+// skeleton) get no Exploit button — there's nothing to jump to.
+const PATH_SOLVER_MAP = {
+  'ret2win': 'overflow_exploit',
+  'Shellcode injection (NX off)': 'shellcode_exploit',
+  'ret2system': 'ret2libc',
+  'execve syscall ROP': 'rop_execve_chain',
+  'ret2libc (leak + return)': 'ret2libc',
+  'Format string': 'format_string_exploit',
+  'No obvious memory-corruption primitive': 'angr_find_flag',
+};
+
+function jumpToSolver(solverType) {
+  sub('exploit', 'solver');
+  const sel = document.getElementById('solver-type');
+  sel.value = solverType;
+  if (loaded) runSolver(document.getElementById('solver-btn'));
+}
+
 async function loadExploitPaths(btn) {
   if (!btn) btn = document.querySelector('#panel-exploit .btn-primary');
   if (!btn) return;
@@ -1435,17 +1564,19 @@ async function loadExploitPaths(btn) {
       const cc = {high:'var(--green)', medium:'var(--yellow)', low:'var(--orange)', info:'var(--text-muted)'};
       for (const p of paths) {
         const col = cc[p.confidence] || 'var(--text-muted)';
+        const solverType = PATH_SOLVER_MAP[p.name];
         let inner = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
           '<span style="font-weight:600;font-size:11px;color:var(--cyan)">'+esc(p.name)+'</span>' +
           (p.confidence ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:'+col+';border:1px solid '+col+';border-radius:3px;padding:0 4px">'+esc(p.confidence)+'</span>' : '') +
+          (solverType ? '<button class="btn btn-primary" style="margin-left:auto;font-size:9px;padding:2px 8px" onclick="jumpToSolver(\''+solverType+'\')">Exploit &rarr;</button>' : '') +
           '</div>';
         if (p.why) inner += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">'+esc(p.why)+'</div>';
         if ((p.steps||[]).length) inner += '<ol style="margin:0 0 4px 16px;padding:0;font-size:11px;color:var(--text-dim);line-height:1.6">'+p.steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>';
         if (p.skeleton) {
           const id = 'sk_'+Math.random().toString(36).slice(2,8);
           inner += '<div style="position:relative;margin-top:4px">' +
-            '<button onclick="navigator.clipboard.writeText(document.getElementById(\''+id+'\').textContent)" style="position:absolute;right:4px;top:4px;font-size:9px;padding:1px 6px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:3px;color:var(--text-muted);cursor:pointer">copy</button>' +
-            '<pre id="'+id+'" style="margin:0;padding:8px;background:#0a0c10;border:1px solid var(--border);border-radius:4px;font-size:10px;line-height:1.45;color:#9db4c9;overflow-x:auto;white-space:pre">'+esc(p.skeleton)+'</pre></div>';
+            '<button class="skel-copy" onclick="copyText(document.getElementById(\''+id+'\').textContent, this)">Copy</button>' +
+            '<pre id="'+id+'" style="margin:0;padding:8px 60px 8px 8px;background:#0a0c10;border:1px solid var(--border);border-radius:4px;font-size:10px;line-height:1.45;color:#9db4c9;overflow-x:auto;white-space:pre;user-select:text">'+esc(p.skeleton)+'</pre></div>';
         }
         html += '<div style="padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,.02);border-radius:4px;border-left:3px solid '+col+'">'+inner+'</div>';
       }
@@ -1643,13 +1774,61 @@ function highlightPseudoC(line) {
     .replace(/(\/\/[^\n]*)/g, '<span class="pc-com">$1</span>');
 }
 
-async function quitServer() {
-  if (!confirm('Quit the CTF Triage server?')) return;
-  try {
-    await fetch('/api/shutdown', {method:'POST'});
-    toast('Server shutting down\u2026','ok');
-    setTimeout(() => { document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--text-dim);font-family:var(--font-mono);font-size:14px">Server stopped.</div>'; }, 500);
-  } catch(e) { toast(e.message,'error'); }
+// Small single-purpose accessible dialog \u2014 not a generic modal system, this
+// app only ever needs one confirmation (quitting kills the whole server).
+function showConfirm(onConfirm) {
+  const overlay = document.getElementById('confirm-overlay');
+  const cancelBtn = document.getElementById('confirm-cancel');
+  const okBtn = document.getElementById('confirm-ok');
+  const focusFoci = [cancelBtn, okBtn];
+  const prevFocus = document.activeElement;
+  overlay.classList.add('show');
+  cancelBtn.focus();
+
+  function close() {
+    overlay.classList.remove('show');
+    document.removeEventListener('keydown', onKey);
+    okBtn.removeEventListener('click', onOk);
+    cancelBtn.removeEventListener('click', onCancel);
+    overlay.removeEventListener('mousedown', onBackdrop);
+    if (prevFocus && prevFocus.focus) prevFocus.focus();
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const i = focusFoci.indexOf(document.activeElement);
+      focusFoci[(i + (e.shiftKey ? -1 : 1) + focusFoci.length) % focusFoci.length].focus();
+    }
+  }
+  function onOk() { close(); onConfirm(); }
+  function onCancel() { close(); }
+  function onBackdrop(e) { if (e.target === overlay) close(); }
+  document.addEventListener('keydown', onKey);
+  okBtn.addEventListener('click', onOk);
+  cancelBtn.addEventListener('click', onCancel);
+  overlay.addEventListener('mousedown', onBackdrop);
+}
+
+function quitServer() {
+  showConfirm(async () => {
+    try {
+      await fetch('/api/shutdown', {method:'POST'});
+      toast('Server shutting down\u2026','ok');
+      setTimeout(() => {
+        document.body.innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg2)">' +
+            '<div class="term" style="width:360px">' +
+              '<div class="term-bar"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span><span class="term-title">session</span></div>' +
+              '<div style="padding:22px;text-align:center;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;line-height:1.7">' +
+                '<div style="color:var(--text);font-weight:600;margin-bottom:6px">Session terminated.</div>' +
+                'Restart the server from the terminal to open a new session.' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+      }, 500);
+    } catch(e) { toast(e.message,'error'); }
+  });
 }
 
 </script>
