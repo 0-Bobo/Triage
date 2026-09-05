@@ -310,6 +310,7 @@ input::placeholder { color:var(--text-muted); }
     <button data-panel="xrefs" aria-label="Cross References"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
     <div class="spacer"></div>
     <button onclick="quitServer()" aria-label="Quit"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
+    <button data-panel="status" aria-label="Status"><span class="ico">&#9707;</span><span class="lbl">Status</span></button>
     <button data-panel="about" aria-label="About"><span class="ico">?</span><span class="lbl">About</span></button>
   </div>
 
@@ -580,6 +581,15 @@ input::placeholder { color:var(--text-muted); }
             <div class="scroll"><table class="dtable"><thead><tr><th>To</th><th>Type</th></tr></thead><tbody id="xref-callees"></tbody></table></div>
           </div>
         </div>
+      </div>
+
+      <!-- ===== Status ===== -->
+      <div class="panel" id="panel-status">
+        <div class="tb">
+          <button class="btn btn-primary" onclick="loadStatus()">&#8635; Refresh</button>
+          <span class="v" id="status-runtime"></span>
+        </div>
+        <div class="scroll" style="padding:14px"><div style="max-width:760px" id="status-container"></div></div>
       </div>
 
       <!-- ===== About ===== -->
@@ -1747,6 +1757,34 @@ function onShowSolver() {
     document.getElementById('exec-btn').disabled = true;
   }
 }
+
+// ── Status ─────────────────────────────────────────────────────────────
+// Doesn't need a binary loaded — this reports on the environment, not the
+// current analysis session.
+async function loadStatus() {
+  const container = document.getElementById('status-container');
+  const rt = document.getElementById('status-runtime');
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Checking…</div>';
+  try {
+    const r = await fetch('/api/status');
+    const data = await r.json();
+    container.innerHTML = (data.engines || []).map(e => {
+      const badge = e.installed
+        ? '<span class="badge badge-low">Installed</span>'
+        : '<span class="badge badge-crit">Missing</span>';
+      const detail = e.detail ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + esc(e.detail) + '</div>' : '';
+      return '<div class="vuln-item"><span class="vuln-name" style="min-width:90px">' + esc(e.name) + '</span>' +
+        '<span class="vuln-desc" style="flex:1">' + esc(e.role) + detail + '</span>' + badge + '</div>';
+    }).join('');
+    const info = data.runtime || {};
+    let text = info.platform || '';
+    if (info.wsl !== null && info.wsl !== undefined) text += '  ·  WSL ' + (info.wsl ? 'available' : 'not available');
+    rt.textContent = text;
+  } catch (e) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Failed to check status: ' + esc(e.message) + '</div>';
+  }
+}
+function onShowStatus() { loadStatus(); }
 
 // ── Util ───────────────────────────────────────────────────────────────
 function esc(s) {

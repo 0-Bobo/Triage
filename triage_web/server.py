@@ -2,6 +2,7 @@
 
 import logging
 import os
+import platform
 import re
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from triage_web.analysis import (
     scan_gadgets,
     section_for_offset,
 )
+from triage_web.autopwn.runner import have_wsl
 from triage_web.config import DEFAULT_MNEMONIC_COLOR, VULN_SEVERITY_COLORS
 from triage_web.config import MNEMONIC_COLORS as MNEMONIC_COLOR_MAP
 from triage_web.engine import HAS_CAPSTONE, Disassembler, ROPEngine, XRefDB
@@ -165,6 +167,77 @@ def health():
             "capstone": HAS_CAPSTONE,
             "lief": HAS_LIEF,
         },
+    }
+
+
+@app.get("/api/status")
+def api_status():
+    """Installed/available status of every optional engine the app can use.
+
+    Two different things get executed against two different Python
+    environments: /api/solver/execute runs a generated script with
+    ``sys.executable`` (this server's own environment), while autopwn's
+    live strategies shell out to WSL/wine per runner.py. ``installed`` here
+    checks the former — the environment a "Run" click actually uses.
+    """
+    import importlib.util
+
+    from triage_web.loader import HAS_LIEF, HAS_PEFILE, HAS_PYELFTOOLS
+
+    def find_spec_ok(name: str) -> bool:
+        try:
+            return importlib.util.find_spec(name) is not None
+        except ImportError:
+            return False
+
+    capa_installed = find_spec_ok("capa")
+    capa_rules_dir = _find_capa_rules_dir()
+
+    engines = [
+        {
+            "id": "capstone",
+            "name": "Capstone",
+            "role": "Disassembly — required for every panel",
+            "installed": HAS_CAPSTONE,
+        },
+        {"id": "pyelftools", "name": "pyelftools", "role": "ELF parsing", "installed": HAS_PYELFTOOLS},
+        {"id": "pefile", "name": "pefile", "role": "PE parsing", "installed": HAS_PEFILE},
+        {"id": "lief", "name": "LIEF", "role": "Advanced binary parsing (fallback loader)", "installed": HAS_LIEF},
+        {
+            "id": "capa",
+            "name": "CAPA",
+            "role": "Capability detection",
+            "installed": capa_installed,
+            "detail": (
+                str(capa_rules_dir)
+                if capa_rules_dir
+                else "rules not found — run: git submodule update --init capa-rules"
+            ),
+        },
+        {"id": "angr", "name": "angr", "role": "angr — Find Flag, ret2win strategy", "installed": find_spec_ok("angr")},
+        {"id": "z3", "name": "Z3", "role": "Z3 — Constraint Solve", "installed": find_spec_ok("z3")},
+        {
+            "id": "unicorn",
+            "name": "Unicorn",
+            "role": "Unicorn — Emulate Function",
+            "installed": find_spec_ok("unicorn"),
+        },
+        {
+            "id": "triton",
+            "name": "Triton",
+            "role": "Triton — Concolic Flag Solve",
+            "installed": find_spec_ok("triton"),
+        },
+        {
+            "id": "pwntools",
+            "name": "pwntools",
+            "role": "ret2libc, ROP execve, shellcode, format string, ret2win / BOF",
+            "installed": find_spec_ok("pwn"),
+        },
+    ]
+    return {
+        "engines": engines,
+        "runtime": {"platform": platform.system(), "wsl": have_wsl() if platform.system() == "Windows" else None},
     }
 
 
@@ -601,6 +674,25 @@ def api_protections():
 # ── CAPA ──────────────────────────────────────────────────────────────
 
 
+def _find_capa_rules_dir() -> Path | None:
+    """Locate a capa-rules checkout: TRIAGE_CAPA_RULES, the pinned git
+    submodule, capa's own bundled/user paths — whichever exists first and
+    actually contains rule files. Independent of whether ``capa`` itself is
+    importable, so /api/status can report rules presence on its own."""
+    repo_root = Path(__file__).resolve().parent.parent
+    env_rules = os.environ.get("TRIAGE_CAPA_RULES")
+    candidates = [Path(env_rules) if env_rules else None, repo_root / "capa-rules"]
+    try:
+        import capa.main
+
+        capa_root = Path(capa.main.get_default_root())
+        candidates += [capa_root / "rules", capa_root.parent / "rules"]
+    except ImportError:
+        pass
+    candidates += [Path("/usr/share/capa/rules"), Path(os.path.expanduser("~/.capa/rules"))]
+    return next((p for p in candidates if p and p.is_dir() and next(p.rglob("*.yml"), None)), None)
+
+
 @app.post("/api/capa")
 def api_capa():
     try:
@@ -611,24 +703,9 @@ def api_capa():
         import capa.rules.cache
     except ImportError:
         raise HTTPException(400, "capa not installed — run: pip install flare-capa") from None
-    import pathlib
 
     loader = _get_loader()
-    repo_root = pathlib.Path(__file__).resolve().parent.parent
-    capa_root = pathlib.Path(capa.main.get_default_root())
-    env_rules = os.environ.get("TRIAGE_CAPA_RULES")
-    rules_candidates = [
-        pathlib.Path(env_rules) if env_rules else None,
-        repo_root / "capa-rules",  # the pinned git submodule
-        capa_root / "rules",
-        capa_root.parent / "rules",
-        pathlib.Path("/usr/share/capa/rules"),
-        pathlib.Path(os.path.expanduser("~/.capa/rules")),
-    ]
-    rules_dir = next(
-        (p for p in rules_candidates if p and p.is_dir() and next(p.rglob("*.yml"), None)),
-        None,
-    )
+    rules_dir = _find_capa_rules_dir()
     if not rules_dir:
         raise HTTPException(
             400,
@@ -638,7 +715,7 @@ def api_capa():
     try:
         rules = capa.rules.get_rules([rules_dir])
         sigpaths = capa.main.get_default_signatures()
-        extractor = cloader.get_extractor(pathlib.Path(loader.path), "auto", "auto", "vivisect", sigpaths)
+        extractor = cloader.get_extractor(Path(loader.path), "auto", "auto", "vivisect", sigpaths)
         result = capa.main.find_capabilities(rules, extractor, disable_progress=True)
         caps = result.matches if hasattr(result, "matches") else result
         items = []

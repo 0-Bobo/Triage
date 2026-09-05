@@ -36,6 +36,15 @@ def test_health_reports_dependency_flags() -> None:
     assert {"pyelftools", "pefile", "capstone", "lief"} <= body["deps"].keys()
 
 
+def test_status_reports_every_engine_with_a_bool_installed_flag() -> None:
+    body = TestClient(server.app).get("/api/status").json()
+    ids = {e["id"] for e in body["engines"]}
+    assert {"capstone", "pyelftools", "pefile", "lief", "capa", "angr", "z3", "unicorn", "triton", "pwntools"} <= ids
+    for e in body["engines"]:
+        assert isinstance(e["installed"], bool)
+    assert body["runtime"]["platform"]
+
+
 def test_index_serves_the_spa_uncached() -> None:
     resp = TestClient(server.app).get("/")
     assert resp.status_code == 200
@@ -56,7 +65,7 @@ def test_index_text_muted_meets_contrast_and_respects_reduced_motion() -> None:
 
 def test_index_has_accessible_labels_on_icon_only_controls() -> None:
     resp = TestClient(server.app).get("/")
-    assert resp.text.count('aria-label="') == 26
+    assert resp.text.count('aria-label="') == 27
     labels = (
         "Auto",
         "Info",
@@ -69,6 +78,7 @@ def test_index_has_accessible_labels_on_icon_only_controls() -> None:
         "CAPA",
         "Cross References",
         "Quit",
+        "Status",
         "About",
         "Toggle offset / virtual-address mode",
         "Previous page",
