@@ -45,8 +45,9 @@ def test_index_serves_the_spa_uncached() -> None:
 
 def test_index_text_muted_meets_contrast_and_respects_reduced_motion() -> None:
     resp = TestClient(server.app).get("/")
-    assert "--text-muted: #868a93;" in resp.text
+    assert "--text-muted: #8f8f8f;" in resp.text
     assert "--text-muted: #63666f;" not in resp.text
+    assert "--text-muted: #767676;" not in resp.text
     assert "@media (prefers-reduced-motion: reduce)" in resp.text
     assert ".panel-enter { animation:none; }" in resp.text
     assert ".spin { animation:none; }" in resp.text
