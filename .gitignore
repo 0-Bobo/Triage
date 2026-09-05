@@ -85,3 +85,4 @@ cython_debug/
 /apps/
 /wsl/
 /.planning/
+/.claude/
