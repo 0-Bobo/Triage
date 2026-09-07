@@ -6,7 +6,7 @@ import math
 import os
 import re
 import subprocess
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 
 from .config import prot_color
 from .knowledge import CRYPTO_SIGNATURES, STRING_SIGS
@@ -63,7 +63,7 @@ class BinaryLoader:
 
         self._elf = self._elf_fh = self._pe = self._lief_bin = None
         self._insn_cache: dict = {}
-        self._v2o_cache: dict[int, int] = {}
+        self._vaddr_to_offset_cache: dict[int, int] = {}
         self._info_cache = None
         self._entropy_cache = None
         self._text_cache = None
@@ -75,6 +75,9 @@ class BinaryLoader:
         self._export_cache = None
         self._symbol_cache = None
         self._cfg_cache: dict = {}
+        self._strings_cache = None
+        self._crypto_cache = None
+        self._packer_cache = None
 
         self._detect_format()
         self._load()
@@ -99,8 +102,8 @@ class BinaryLoader:
                 self._elf_fh = open(self.path, "rb")
                 self._elf = ELFFile(self._elf_fh)
                 self.entry_point = self._elf.header["e_entry"]
-                ei = self._elf.header["e_ident"]["EI_CLASS"]
-                self.bits = 64 if ei == "ELFCLASS64" else 32
+                ei_class = self._elf.header["e_ident"]["EI_CLASS"]
+                self.bits = 64 if ei_class == "ELFCLASS64" else 32
                 machine_map = {
                     "EM_X86_64": "x86_64",
                     "EM_386": "x86",
@@ -144,11 +147,12 @@ class BinaryLoader:
     def hashes(self) -> dict[str, str]:
         if self._hash_cache is not None:
             return self._hash_cache
-        raw = bytes(self._raw)
+        # self._raw is a bytearray; hashlib accepts it directly via the buffer
+        # protocol, so no need to copy the whole file into a bytes object first
         self._hash_cache = {
-            "MD5": hashlib.md5(raw).hexdigest(),
-            "SHA1": hashlib.sha1(raw).hexdigest(),
-            "SHA256": hashlib.sha256(raw).hexdigest(),
+            "MD5": hashlib.md5(self._raw).hexdigest(),
+            "SHA1": hashlib.sha1(self._raw).hexdigest(),
+            "SHA256": hashlib.sha256(self._raw).hexdigest(),
         }
         return self._hash_cache
 
@@ -214,6 +218,21 @@ class BinaryLoader:
 
     # ── Strings ─────────────────────────────────────────────────
     def get_strings(self, min_len=4) -> list[str]:
+        # The default (and every caller-supplied length >= 4) is served from a
+        # cache of the min-length-4 scan: since printable runs are delimited
+        # by non-printable bytes regardless of the length threshold, filtering
+        # that scan for len(s) >= min_len is bit-identical to re-scanning at
+        # min_len. Shorter thresholds fall outside what the cache holds, so
+        # they re-scan directly (a rare, near-degenerate input either way).
+        if min_len < 4:
+            return self._scan_strings(min_len)
+        if self._strings_cache is None:
+            self._strings_cache = self._scan_strings(4)
+        if min_len == 4:
+            return self._strings_cache
+        return [s for s in self._strings_cache if len(s) >= min_len]
+
+    def _scan_strings(self, min_len: int) -> list[str]:
         try:
             r = subprocess.run(
                 ["strings", "-n", str(min_len), self.path],
@@ -491,11 +510,11 @@ class BinaryLoader:
         Memoised per instance — a module-level lru_cache would keep every
         BinaryLoader alive for the life of the process.
         """
-        cached = self._v2o_cache.get(vaddr)
+        cached = self._vaddr_to_offset_cache.get(vaddr)
         if cached is not None:
             return cached
         offset = self._compute_vaddr_to_offset(vaddr)
-        self._v2o_cache[vaddr] = offset
+        self._vaddr_to_offset_cache[vaddr] = offset
         return offset
 
     def _compute_vaddr_to_offset(self, vaddr: int) -> int:
@@ -515,6 +534,8 @@ class BinaryLoader:
         return -1
 
     def read_vaddr(self, vaddr: int, size: int) -> bytes:
+        if size <= 0:
+            return b""
         off = self.vaddr_to_offset(vaddr)
         if off < 0:
             return b""
@@ -523,7 +544,7 @@ class BinaryLoader:
 
     def read_offset(self, offset: int, size: int) -> bytes:
         """Read `size` bytes starting at a raw file offset (clamped to EOF)."""
-        if offset < 0 or offset >= len(self._raw):
+        if size <= 0 or offset < 0 or offset >= len(self._raw):
             return b""
         return bytes(self._raw[offset : offset + size])
 
@@ -532,29 +553,36 @@ class BinaryLoader:
     def compute_entropy(data: bytes) -> float:
         if not data:
             return 0.0
-        freq = [0] * 256
-        for b in data:
-            freq[b] += 1
         n = len(data)
-        return -sum(p * math.log2(p) for f in freq if (p := f / n) > 0)
+        # Counter's frequency count runs in C, unlike a per-byte Python loop
+        # over a 256-slot table; only byte values that actually occur end up
+        # as keys, which is equivalent to skipping the zero-frequency slots
+        # the old loop's `if p > 0` guard filtered out.
+        return -sum(p * math.log2(p) for count in Counter(data).values() if (p := count / n) > 0)
 
     # ── Crypto detection ─────────────────────────────────────────
     def detect_crypto(self) -> list[tuple[str, int]]:
+        if self._crypto_cache is not None:
+            return self._crypto_cache
         results = []
-        raw = bytes(self._raw)
+        # self._raw is already a bytearray — .find() works directly on it, no
+        # need for a transient full-file bytes() copy
         for name, sig in CRYPTO_SIGNATURES.items():
-            idx = raw.find(sig)
+            idx = self._raw.find(sig)
             if idx >= 0:
                 results.append((name, idx))
+        self._crypto_cache = results
         return results
 
     # ── Packer detection ─────────────────────────────────────────
     def detect_packer(self) -> list[str]:
+        if self._packer_cache is not None:
+            return self._packer_cache
         hits = []
-        raw = bytes(self._raw)
         for packer, sigs in STRING_SIGS.items():
-            if any(sig.encode() in raw for sig in sigs):
+            if any(sig.encode() in self._raw for sig in sigs):
                 hits.append(packer)
+        self._packer_cache = hits
         return hits
 
     # ── Summary info ─────────────────────────────────────────────
@@ -582,7 +610,7 @@ class BinaryLoader:
 
     # ── Cache management ────────────────────────────────────────
     def _clear_caches(self):
-        self._v2o_cache.clear()
+        self._vaddr_to_offset_cache.clear()
         self._insn_cache.clear()
         self._cfg_cache.clear()
         self._info_cache = None
@@ -595,3 +623,6 @@ class BinaryLoader:
         self._import_cache = None
         self._export_cache = None
         self._symbol_cache = None
+        self._strings_cache = None
+        self._crypto_cache = None
+        self._packer_cache = None

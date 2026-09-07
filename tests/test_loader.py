@@ -53,6 +53,19 @@ def test_read_helpers_clamp_and_bound(loader: BinaryLoader) -> None:
     assert 0 < len(big) == loader.file_size
 
 
+def test_read_offset_rejects_non_positive_size(loader: BinaryLoader) -> None:
+    """A negative size must not exploit Python's negative-slice-stop semantics."""
+    assert loader.read_offset(10, -1000) == b""
+    assert loader.read_offset(10, 0) == b""
+
+
+def test_read_vaddr_rejects_non_positive_size(loader: BinaryLoader) -> None:
+    text = next(s for s in loader.get_sections() if s["name"] == ".text")
+    assert loader.read_vaddr(text["vaddr"], -1000) == b""
+    assert loader.read_vaddr(text["vaddr"], 0) == b""
+    assert len(loader.read_vaddr(text["vaddr"], 16)) == 16  # positive size still works
+
+
 def test_compute_entropy_bounds() -> None:
     assert BinaryLoader.compute_entropy(b"") == 0.0
     assert BinaryLoader.compute_entropy(b"\x00" * 256) == pytest.approx(0.0)
@@ -61,15 +74,61 @@ def test_compute_entropy_bounds() -> None:
     assert not math.isnan(BinaryLoader.compute_entropy(b"abc"))
 
 
+def test_compute_entropy_matches_the_reference_per_byte_definition() -> None:
+    """Guards the Counter-based frequency count against the original per-byte loop."""
+
+    def reference_entropy(data: bytes) -> float:
+        if not data:
+            return 0.0
+        freq = [0] * 256
+        for b in data:
+            freq[b] += 1
+        n = len(data)
+        return -sum(p * math.log2(p) for f in freq if (p := f / n) > 0)
+
+    for block in (b"aaabbbccd", b"\xff\x00\xff\x00\x01", bytes(range(256)) * 3, b"x"):
+        assert BinaryLoader.compute_entropy(block) == pytest.approx(reference_entropy(block))
+
+
 def test_detect_crypto_and_packer_run(loader: BinaryLoader) -> None:
     assert isinstance(loader.detect_crypto(), list)
     assert isinstance(loader.detect_packer(), list)
+
+
+def test_detect_crypto_and_packer_cache_and_reset_on_clear(loader: BinaryLoader) -> None:
+    first_crypto = loader.detect_crypto()
+    assert loader.detect_crypto() is first_crypto  # cached, same object returned
+
+    first_packer = loader.detect_packer()
+    assert loader.detect_packer() is first_packer
+
+    loader._clear_caches()
+    assert loader.detect_crypto() is not first_crypto  # cache-clear forces recompute
+    assert loader.detect_packer() is not first_packer
 
 
 def test_strings_fallback_finds_ascii(loader: BinaryLoader) -> None:
     strings = loader.get_strings(min_len=4)
     assert isinstance(strings, list) and strings
     assert all(len(s) >= 4 for s in strings)
+
+
+def test_get_strings_is_cached_and_reset_by_clear_caches(loader: BinaryLoader) -> None:
+    """A second call must not re-scan; only the cache-clear path forces a re-scan."""
+    first = loader.get_strings(min_len=4)
+    assert loader.get_strings(min_len=4) is first  # served from the cache, same object
+
+    loader._clear_caches()
+    second = loader.get_strings(min_len=4)
+    assert second is not first  # cache was reset, so this is a fresh scan
+    assert second == first  # but the scan result is unchanged
+
+
+def test_get_strings_filters_the_cached_scan_for_a_larger_min_len(loader: BinaryLoader) -> None:
+    baseline = loader.get_strings(min_len=4)
+    filtered = loader.get_strings(min_len=6)
+    assert all(len(s) >= 6 for s in filtered)
+    assert set(filtered) <= set(baseline)
 
 
 # ── PE format branch ───────────────────────────────────────────────────
