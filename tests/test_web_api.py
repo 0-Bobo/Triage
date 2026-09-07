@@ -106,6 +106,28 @@ def test_index_wires_hash_based_panel_routing() -> None:
     assert "addEventListener('hashchange'" in resp.text
 
 
+def test_index_escapes_the_imports_library_cell() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "'</td><td style=\"color:var(--text-dim)\">'+esc(i.library||'')+'</td>" in resp.text
+    assert "'</td><td style=\"color:var(--text-dim)\">'+(i.library||'')+'</td>" not in resp.text
+
+
+def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "function escAttr(s) {" in resp.text
+    # Untrusted names land in a data-* attribute (escAttr), read back via
+    # dataset in the handler — never string-concatenated into the inline
+    # handler's JS-string literal.
+    assert "data-name=\"'+escAttr(w.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
+    assert "data-name=\"'+escAttr(s.function)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
+    assert "data-name=\"'+escAttr(f.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
+    # The old vulnerable pattern — the untrusted name spliced straight into
+    # the quoted inline-handler argument — must be gone from all 3 sites.
+    assert "onclick=\"showCodeWithSearch(\\'\"+esc(w.name)+\"\\');return false\"" not in resp.text
+    assert "onclick=\"showCodeWithSearch(\\'\"+esc(s.function)+\"\\');return false\"" not in resp.text
+    assert "onclick=\"showCodeWithSearch(\\'\"+esc(f.name)+\"\\');return false\"" not in resp.text
+
+
 def test_read_endpoint_requires_a_loaded_binary(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server._session, "loader", None)
     resp = TestClient(server.app).get("/api/functions")

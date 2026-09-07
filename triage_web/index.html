@@ -1233,7 +1233,7 @@ async function loadImports() {
         const sev = i.vuln[0];
         v = '<span class="badge badge-'+sev.toLowerCase()+'">'+sev+' \u2014 '+esc(i.vuln[1])+'</span>';
       }
-      return '<tr><td>'+esc(i.name)+'</td><td style="color:var(--text-dim)">'+(i.library||'')+'</td><td>'+v+'</td></tr>';
+      return '<tr><td>'+esc(i.name)+'</td><td style="color:var(--text-dim)">'+esc(i.library||'')+'</td><td>'+v+'</td></tr>';
     }).join('');
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -1537,7 +1537,7 @@ async function loadExploitPaths(btn) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">🏆 Win / backdoor functions</div>';
       for (const w of sum.win_functions) {
         html += '<div style="padding:5px 10px;margin-bottom:4px;background:rgba(63,185,80,.06);border-left:3px solid var(--green);border-radius:4px;font-size:11px">' +
-          '<a href="#" onclick="showCodeWithSearch(\''+esc(w.name)+'\');return false" style="font-family:var(--font-mono);color:var(--green);font-weight:600;text-decoration:none">'+esc(w.name)+'</a>' +
+          '<a href="#" data-name="'+escAttr(w.name)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--green);font-weight:600;text-decoration:none">'+esc(w.name)+'</a>' +
           ' <span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(w.address)+'</span>' +
           ' <span style="color:var(--text-muted)">— '+esc(w.reason)+'</span></div>';
       }
@@ -1546,7 +1546,7 @@ async function loadExploitPaths(btn) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px 0">↳ Stack overflow sites</div>';
       for (const s of sites) {
         html += '<div style="padding:6px 10px;margin-bottom:4px;background:rgba(255,255,255,.02);border-radius:4px;font-size:11px">' +
-          '<a href="#" onclick="showCodeWithSearch(\''+esc(s.function)+'\');return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none">'+esc(s.function)+'</a>' +
+          '<a href="#" data-name="'+escAttr(s.function)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none">'+esc(s.function)+'</a>' +
           ' <span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(s.address)+'</span>' +
           ' <span style="color:var(--red)">'+esc((s.unsafe_calls||[]).join(', '))+'</span><br>' +
           '<span style="color:var(--text-dim)">frame '+s.stack_frame+' B · buffer @ -0x'+(s.buffer_offset||0).toString(16)+
@@ -1559,7 +1559,7 @@ async function loadExploitPaths(btn) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">\u2757 Vulnerable Functions</div>';
       for (const f of funcs) {
         const addrHtml = f.address ? '<span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(f.address)+'</span>' : '';
-        const clickableName = '<a href="#" onclick="showCodeWithSearch(\''+esc(f.name)+'\');return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none;cursor:pointer">'+esc(f.name)+'</a>';
+        const clickableName = '<a href="#" data-name="'+escAttr(f.name)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none;cursor:pointer">'+esc(f.name)+'</a>';
         html += '<div style="padding:8px 10px;margin-bottom:6px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+(f.severity==='CRITICAL'?'var(--red)':f.severity==='HIGH'?'var(--orange)':'var(--yellow)')+'">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
             clickableName +
@@ -1797,6 +1797,19 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// Escapes a value for use inside a double- or single-quoted HTML attribute.
+// esc() only round-trips a text node, so it never escapes quotes — unsafe
+// for an attribute value that may itself contain one. Use this instead
+// whenever untrusted data is written into a data-* attribute or similar.
+function escAttr(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Highlight one line of pseudo-C. Passes emit class="pc-*" only — never an
