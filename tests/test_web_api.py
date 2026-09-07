@@ -118,17 +118,17 @@ def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
     # Untrusted names land in a data-* attribute (escAttr), read back via
     # dataset in the handler — never string-concatenated into the inline
     # handler's JS-string literal.
-    win_link = "data-name=\"'+escAttr(w.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
-    ovf_link = "data-name=\"'+escAttr(s.function)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
-    vuln_link = "data-name=\"'+escAttr(f.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
+    win_link = 'data-name="\'+escAttr(w.name)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
+    ovf_link = 'data-name="\'+escAttr(s.function)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
+    vuln_link = 'data-name="\'+escAttr(f.name)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
     assert win_link in resp.text
     assert ovf_link in resp.text
     assert vuln_link in resp.text
     # The old vulnerable pattern — the untrusted name spliced straight into
     # the quoted inline-handler argument — must be gone from all 3 sites.
-    assert "onclick=\"showCodeWithSearch(\\'\"+esc(w.name)+\"\\');return false\"" not in resp.text
-    assert "onclick=\"showCodeWithSearch(\\'\"+esc(s.function)+\"\\');return false\"" not in resp.text
-    assert "onclick=\"showCodeWithSearch(\\'\"+esc(f.name)+\"\\');return false\"" not in resp.text
+    assert 'onclick="showCodeWithSearch(\\\'"+esc(w.name)+"\\\');return false"' not in resp.text
+    assert 'onclick="showCodeWithSearch(\\\'"+esc(s.function)+"\\\');return false"' not in resp.text
+    assert 'onclick="showCodeWithSearch(\\\'"+esc(f.name)+"\\\');return false"' not in resp.text
 
 
 def test_index_response_ok_guard_covers_every_load_fetcher() -> None:
@@ -162,7 +162,7 @@ def test_index_subtab_switch_uses_a_non_ambiguous_name() -> None:
     assert "onclick=\"switchSubview('exploit','vulns')\"" in resp.text
     # the old name must not survive as a callable identifier
     assert "function sub(panel, name) {" not in resp.text
-    assert "onclick=\"sub(" not in resp.text
+    assert 'onclick="sub(' not in resp.text
 
 
 def test_read_endpoint_requires_a_loaded_binary(monkeypatch: pytest.MonkeyPatch) -> None:

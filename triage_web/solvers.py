@@ -435,9 +435,7 @@ def _unicorn_emulate_func(
     )
 
 
-def _ret2csu(
-    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
-) -> str:
+def _ret2csu(path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None) -> str:
     """3-argument call via the __libc_csu_init gadget pair, for binaries whose
     ROP gadget set has no clean `pop rdi; ret` - __libc_csu_init ships with
     nearly every dynamically-linked glibc binary, so its gadgets are almost
@@ -554,9 +552,7 @@ def _one_gadget_rce(
     )
 
 
-def _srop_chain(
-    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
-) -> str:
+def _srop_chain(path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None) -> str:
     """Sigreturn-oriented chain: one `syscall` gadget plus a forged sigcontext
     controls every register (rax/rdi/rsi/rdx/rip/...), so it works even when
     the binary has no gadgets beyond a bare `syscall; ret`."""

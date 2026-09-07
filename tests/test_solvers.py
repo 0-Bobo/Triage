@@ -67,9 +67,7 @@ def test_ret2libc_falls_back_to_runtime_gadget_search_when_pop_rdi_unknown() -> 
 
 
 def test_one_gadget_rce_bakes_a_real_pop_rdi_and_offset() -> None:
-    src = solvers.generate_solver(
-        "one_gadget_rce", "./target.bin", "x86_64", 64, pop_rdi=0x401234, overflow_offset=40
-    )
+    src = solvers.generate_solver("one_gadget_rce", "./target.bin", "x86_64", 64, pop_rdi=0x401234, overflow_offset=40)
     ast.parse(src)
     compile(src, "<one_gadget_rce:known>", "exec")
     assert "POP_RDI = 0x401234" in src
