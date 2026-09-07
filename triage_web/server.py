@@ -9,7 +9,7 @@ import tempfile
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
@@ -82,6 +82,8 @@ class Session:
     xrefs: XRefDB | None = None
     path: str | None = None
     filename: str | None = None
+    _known_calls_cache: dict | None = None
+    _overflow_sites_cache: list | None = None
 
     def reset(self, **values: object) -> None:
         """Close the previous binary and replace the whole session."""
@@ -90,6 +92,27 @@ class Session:
         known = {f.name for f in fields(self)}
         for name in known:
             setattr(self, name, values.get(name))
+
+    def get_known_calls(self) -> dict:
+        """Address→name map for known calls (imports + local functions),
+        computed once per loaded binary. Cleared by reset() on reload."""
+        if self._known_calls_cache is None:
+            self._known_calls_cache = build_known_calls(self.loader)
+        return self._known_calls_cache
+
+    def get_overflow_sites(self) -> list:
+        """Overflow-site analysis, computed once per loaded binary — it
+        depends only on the loaded binary and disassembler. Cleared by
+        reset() on reload. Returns [] without caching if the disassembler
+        isn't ready yet (matches the previous per-call degrade-gracefully
+        behavior)."""
+        if self.disasm is None:
+            return []
+        if self._overflow_sites_cache is None:
+            self._overflow_sites_cache = overflow_sites(
+                self.loader, self.disasm, self.get_known_calls(), self.loader.bits == 64
+            )
+        return self._overflow_sites_cache
 
     def require_loader(self) -> BinaryLoader:
         if self.loader is None:
@@ -458,7 +481,7 @@ def api_hex(off: str | None = None, vaddr: str | None = None, size: int = 512):
 def api_hex_search(q: str, kind: str = "auto", limit: int = 500):
     """Find a byte pattern in the raw file. kind: 'hex' | 'str' | 'auto'."""
     loader = _get_loader()
-    raw = bytes(loader._raw)
+    raw = loader._raw  # bytearray — .find() works directly, no whole-file copy needed
     if kind == "str":
         needle = q.encode("latin-1", "ignore")
     elif kind == "hex":
@@ -515,25 +538,22 @@ def api_disasm_functions():
     loader = _get_loader()
     _session.require_disasm()  # 400 if analysis isn't ready
 
-    known_calls = build_known_calls(loader)
+    known_calls = _session.get_known_calls()
     funcs = loader.get_functions()
     # Binary-wide flag: does this binary import/resolve any known-vulnerable call?
     # (Per-function attribution would require disassembling every function here.)
     binary_has_vuln_calls = any(name in VULN_PATTERNS for name in known_calls.values())
     result = []
-    for name, addr in funcs:
-        # Compute size from next function or section end
-        size = 32
-        for _name, a2 in funcs:
-            if a2 > addr:
-                size = min(a2 - addr, 2048)
-                break
+    # funcs is sorted by address (loader.get_functions()); each function's size
+    # is the gap to the next one, capped at 2048 — O(n), not a rescan per function.
+    for idx, (name, addr) in enumerate(funcs):
+        size = min(funcs[idx + 1][1] - addr, 2048) if idx + 1 < len(funcs) else 32
         result.append(
             {
                 "name": name,
                 "address": hex(addr),
                 "size": size,
-                "is_vulnerable": binary_has_vuln_calls,
+                "binary_has_vuln_calls": binary_has_vuln_calls,
             }
         )
     return {"functions": result, "count": len(result)}
@@ -545,7 +565,7 @@ def api_disasm_function(vaddr: str = "0x0", size: int = 0):
     disasm = _session.require_disasm()
     addr = _parse_hex_param(vaddr, "vaddr")
 
-    known_calls = build_known_calls(loader)
+    known_calls = _session.get_known_calls()
 
     # Auto-size to next function boundary if size not given
     if not size or size < 1:
@@ -564,7 +584,7 @@ def api_disasm_variables(vaddr: str = "0x0", size: int = 0):
     disasm = _session.require_disasm()
     addr = _parse_hex_param(vaddr, "vaddr")
 
-    known_calls = build_known_calls(loader)
+    known_calls = _session.get_known_calls()
 
     if not size or size < 1:
         size = _size_to_next_function(loader, addr)
@@ -589,7 +609,7 @@ def api_disasm_decompile(vaddr: str = "0x0"):
     disasm = _session.require_disasm()
     addr = _parse_hex_param(vaddr, "vaddr")
 
-    known_calls = build_known_calls(loader)
+    known_calls = _session.get_known_calls()
 
     # Auto-size to the *nearest* following function boundary
     nexts = [a2 for _, a2 in loader.get_functions() if a2 > addr]
@@ -681,9 +701,11 @@ def api_rop_scan():
 
 
 @app.get("/api/rop/gadgets")
-def api_rop_gadgets(query: str = "", cls: str = ""):
+def api_rop_gadgets(query: str = "", semantic_cls: str = Query("", alias="cls")):
+    # `cls` stays the wire-level query param name (frontend/tests send `?cls=`);
+    # `semantic_cls` is the descriptive name used locally and by ROPEngine.search.
     rop = _session.require_rop()
-    return {"gadgets": rop.search(query=query, semantic_cls=cls), "total": len(rop.gadgets)}
+    return {"gadgets": rop.search(query=query, semantic_cls=semantic_cls), "total": len(rop.gadgets)}
 
 
 # ── Protections ──────────────────────────────────────────────────────
@@ -764,13 +786,12 @@ def api_capa():
 @app.get("/api/solver")
 def api_solver(solver_type: str = "angr_find_flag"):
     loader = _get_loader()
-    disasm = _session.disasm  # optional here — degrade gracefully if absent
     rop = _session.rop
     gadgets = scan_gadgets(rop)
     pop_rdi_hex = gadgets.get("pop rdi; ret")
     pop_rdi = int(pop_rdi_hex, 16) if pop_rdi_hex is not None else None
-    known_calls = build_known_calls(loader) if disasm else {}
-    ov_sites = overflow_sites(loader, disasm, known_calls, loader.bits == 64) if disasm else []
+    # get_overflow_sites() degrades to [] on its own if disasm isn't ready yet.
+    ov_sites = _session.get_overflow_sites()
     overflow_offset = ov_sites[0]["est_offset_to_ret"] if ov_sites else None
     try:
         code = generate_solver(
@@ -832,7 +853,7 @@ def api_entropy():
     loader = _get_loader()
     if loader._entropy_cache is not None:
         return loader._entropy_cache
-    raw = bytes(loader._raw)
+    raw = loader._raw  # bytearray — sliceable per block, no whole-file copy needed
     block = 256
     blocks = []
     for i in range(0, len(raw), block):
@@ -890,7 +911,6 @@ def api_memory_map():
 @app.get("/api/vuln-hints")
 def api_vuln_hints():
     loader = _get_loader()
-    disasm = _session.disasm  # optional here — degrade gracefully if absent
     rop = _session.rop
     is64 = loader.bits == 64
     imports = {i["name"] for i in loader.get_imports()}
@@ -905,14 +925,14 @@ def api_vuln_hints():
     win_functions = find_win_functions(loader)
     binsh = find_binsh(loader)
     gadgets = scan_gadgets(rop)
-    known_calls = build_known_calls(loader) if disasm else {}
-    ov_sites = overflow_sites(loader, disasm, known_calls, is64) if disasm else []
+    # get_overflow_sites() degrades to [] on its own if disasm isn't ready yet.
+    ov_sites = _session.get_overflow_sites()
 
     filename = _session.filename or "chall"
     first_off = ov_sites[0]["est_offset_to_ret"] if ov_sites else None
 
     # ── Per-function detail (imports that are exploitation-relevant) ──
-    functions_exploit = []
+    vulnerable_functions = []
     for imp_name in sorted(imports):
         if imp_name not in VULN_PATTERNS:
             continue
@@ -937,7 +957,7 @@ def api_vuln_hints():
         sev, desc, fix = VULN_PATTERNS[imp_name]
         info = imports_by_name.get(imp_name, {})
         address = info.get("address", None)
-        functions_exploit.append(
+        vulnerable_functions.append(
             {
                 "name": imp_name,
                 "address": hex(address) if address else "",
@@ -1127,7 +1147,7 @@ def api_vuln_hints():
             "gadgets": gadgets,
         },
         "overflow_sites": ov_sites,
-        "vulnerable_functions": functions_exploit,
+        "vulnerable_functions": vulnerable_functions,
         "paths": paths,
     }
 

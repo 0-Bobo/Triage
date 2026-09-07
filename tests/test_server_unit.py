@@ -297,6 +297,20 @@ def test_entropy_result_is_cached_between_requests(app_client, sample_path) -> N
     assert first == second
 
 
+def test_entropy_and_hex_search_operate_on_the_raw_buffer_directly(app_client, sample_path) -> None:
+    """Proves the copy-elision (operating on loader._raw, a bytearray,
+    instead of a throwaway bytes() copy) is output-preserving."""
+    app_client.post("/api/load", data={"path": str(sample_path)})
+
+    entropy = app_client.get("/api/entropy").json()
+    assert entropy["total_bytes"] == len(server._session.loader._raw)
+
+    hits = app_client.get("/api/hex/search", params={"q": "7f454c46", "kind": "hex"}).json()
+    assert hits["needle_len"] == 4
+    assert 0 in hits["hits"]  # ELF magic at offset 0
+    assert hits["total"] == len(server._session.loader._raw)
+
+
 def test_vuln_hints_skips_non_exploitation_imports(app_client, vuln_samples) -> None:
     # vuln_execstack imports open()/write() — in VULN_PATTERNS but not the
     # exploitation-relevant subset → the `continue` at the top of the loop
@@ -422,3 +436,35 @@ def test_successful_upload_removes_the_pre_copy_temp_file(app_client, monkeypatc
     assert r.status_code == 200
     assert "unlinked" in seen
     assert not os.path.exists(seen["unlinked"])
+
+
+# ── Per-binary analysis cache ────────────────────────────────────────
+
+
+def test_known_calls_and_overflow_sites_are_cached_per_binary(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    session = server._session
+
+    known_calls_first = session.get_known_calls()
+    assert session.get_known_calls() is known_calls_first  # served from the cache
+
+    overflow_sites_first = session.get_overflow_sites()
+    assert session.get_overflow_sites() is overflow_sites_first  # served from the cache
+
+    # A fresh load resets the session — the reset() field list picks up the
+    # new cache fields automatically, so a reload must produce fresh objects.
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    session = server._session
+    assert session.get_known_calls() is not known_calls_first
+    assert session.get_overflow_sites() is not overflow_sites_first
+
+
+# ── Renamed names (readability findings 13, 19, 20) ──────────────────
+
+
+def test_disasm_functions_exposes_the_renamed_binary_wide_field(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    funcs = app_client.get("/api/disasm/functions").json()["functions"]
+    assert funcs
+    assert all("binary_has_vuln_calls" in f for f in funcs)
+    assert all("is_vulnerable" not in f for f in funcs)
