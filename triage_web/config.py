@@ -1,31 +1,5 @@
 """Color palette, mnemonic colors, and visual constants."""
 
-# ── UI Color Palette ────────────────────────────────────────────────
-C = {
-    "bg": "#0d1117",
-    "mantle": "#161b22",
-    "crust": "#0d1117",
-    "surface0": "#21262d",
-    "surface1": "#30363d",
-    "surface2": "#484f58",
-    "overlay0": "#6e7681",
-    "overlay1": "#8b949e",
-    "text": "#e6edf3",
-    "subtext1": "#b0b8c4",
-    "subtext0": "#8b949e",
-    "red": "#ff7b72",
-    "maroon": "#ffa198",
-    "orange": "#d29922",
-    "yellow": "#d29922",
-    "green": "#3fb950",
-    "teal": "#56d4dd",
-    "sky": "#79c0ff",
-    "blue": "#58a6ff",
-    "lavender": "#bc8cff",
-    "mauve": "#bc8cff",
-    "pink": "#f778ba",
-}
-
 # ── Disassembly Mnemonic Colors (IntelliJ Dark / Ghidra style) ────
 MNEMONIC_COLORS = {
     "call": "#58a6ff",

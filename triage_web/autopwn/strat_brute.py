@@ -58,7 +58,7 @@ def solve_brute(path: str, *, timeout: float = 90.0, max_len: int = 24) -> Brute
         nonlocal runs
         runs += 1
         p = run_target(path, stdin=candidate + b"\n", argv=(candidate.decode("latin-1"),), timeout=6.0)
-        return p.rc, (p.stdout + b"\n" + p.stderr)
+        return p.returncode, (p.stdout + b"\n" + p.stderr)
 
     charset = (string.digits if digits_only else string.digits + string.ascii_letters + "_-{}!?.").encode()
 

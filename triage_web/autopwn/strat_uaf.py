@@ -618,7 +618,7 @@ def _run_selftest(path, script, timeout, log) -> str | None:
                 continue
             proc = run_script(script, timeout=per, env={"TRIAGE_ROUNDS": "3"})
             hits = extract_flags(proc.stdout + proc.stderr)
-            log.append(f"attempt {attempt}: rc={proc.rc} {proc.text.strip()[:160]!r}")
+            log.append(f"attempt {attempt}: rc={proc.returncode} {proc.text.strip()[:160]!r}")
             if hits:
                 return hits[0]
         finally:

@@ -625,7 +625,7 @@ def test_popen_paths(monkeypatch):
     ok = runner._popen(["x"], b"", 1.0)
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _FakeCompleted())
     ok = runner._popen(["echo"], b"", 1.0)
-    assert ok.rc == 0 and ok.flags == ["flag{sub}"]
+    assert ok.returncode == 0 and ok.flags == ["flag{sub}"]
 
     def timeout(*a, **k):
         raise runner.subprocess.TimeoutExpired(cmd="x", timeout=1, output=b"partial", stderr=b"")

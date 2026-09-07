@@ -301,7 +301,6 @@ def _shellcode_exploit(
         f"{_common(path)}"
         f"from pwn import *\n\n"
         f"elf = context.binary = ELF(BINARY, checksec=False)\n"
-        f'context.arch  = "{arch.lower().replace("_64", "")}"\n'
         f"context.bits  = {bits}\n"
         f'context.log_level = "info"\n\n'
         f"sc = asm(shellcraft.sh())\n"
@@ -565,7 +564,6 @@ def _srop_chain(
         f"{_common(path)}"
         f"from pwn import *\n\n"
         f"elf = context.binary = ELF(BINARY, checksec=False)\n"
-        f'context.arch  = "{arch.lower().replace("_64", "")}"\n'
         f"context.bits  = {bits}\n"
         f'context.log_level = "info"\n\n'
         f"rop = ROP(elf)\n"

@@ -75,7 +75,7 @@ def solve_format_string(
             if flags:
                 res.ok, res.flag = True, flags[0]
             else:
-                res.reason = f"probe ran (rc={proc.rc}) with no flag in the leak"
+                res.reason = f"probe ran (rc={proc.returncode}) with no flag in the leak"
             return res
 
         res.reason = f"{info['arch']} / no runtime — probe script generated, run it against the target"

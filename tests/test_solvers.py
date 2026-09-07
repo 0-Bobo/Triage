@@ -119,6 +119,17 @@ def test_shellcode_exploit_exposes_buf_addr_as_a_named_constant() -> None:
     assert "p64(0xdeadbeef)" not in src
 
 
+def test_shellcode_exploit_relies_on_elf_auto_detected_arch() -> None:
+    """A 64-bit target must not have its architecture overwritten with an
+    invalid, truncated value (e.g. "x86" instead of pwntools' "amd64") -
+    the ELF-context binding already sets it correctly."""
+    src = solvers.generate_solver("shellcode_exploit", "./target.bin", "x86_64", 64)
+    ast.parse(src)
+    compile(src, "<shellcode:arch>", "exec")
+    assert 'context.arch  = "x86"' not in src
+    assert "context.binary = ELF(BINARY" in src
+
+
 # ── unicorn_emulate_func: named INPUT_BYTES ─────────────────────────────
 
 

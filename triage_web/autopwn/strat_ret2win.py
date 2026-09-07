@@ -82,7 +82,7 @@ def solve_ret2win(
             elif not proc.runnable:
                 result.reason = f"generated the exploit but cannot run it here: {proc.text.strip()[:200]}"
             else:
-                result.reason = f"exploit ran but produced no flag (rc={proc.rc}); output:\n{proc.text[:400]}"
+                result.reason = f"exploit ran but produced no flag (rc={proc.returncode}); output:\n{proc.text[:400]}"
         else:
             result.reason = f"{info['arch']} target — script generated; run it where the binary executes"
         return result

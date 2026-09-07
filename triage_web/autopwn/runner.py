@@ -45,7 +45,7 @@ _FLAG_PATTERNS: tuple[str, ...] = (
 class ProcResult:
     """Outcome of a single target / script execution."""
 
-    rc: int | None
+    returncode: int | None
     stdout: bytes
     stderr: bytes
     timed_out: bool
@@ -130,7 +130,7 @@ def _popen(cmd: list[str], stdin: bytes, timeout: float) -> ProcResult:
         )
     except subprocess.TimeoutExpired as exc:
         return ProcResult(
-            rc=None,
+            returncode=None,
             stdout=exc.stdout or b"",
             stderr=exc.stderr or b"",
             timed_out=True,
@@ -141,7 +141,7 @@ def _popen(cmd: list[str], stdin: bytes, timeout: float) -> ProcResult:
         return ProcResult(None, b"", str(exc).encode(), False, 0.0, " ".join(cmd), runnable=False)
     out, err = proc.stdout or b"", proc.stderr or b""
     res = ProcResult(
-        rc=proc.returncode,
+        returncode=proc.returncode,
         stdout=out,
         stderr=err,
         timed_out=False,
