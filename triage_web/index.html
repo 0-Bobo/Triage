@@ -375,7 +375,7 @@ input::placeholder { color:var(--text-muted); }
       <div class="panel code-panel" id="panel-code">
         <div style="width:200px;min-width:180px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
           <div class="tb" style="padding:4px 6px">
-            <input placeholder="Search funcs..." id="code-func-search" oninput="loadCodeFunctions(this.value)" style="width:100%;font-size:10px" aria-label="Search functions">
+            <input placeholder="Search funcs..." id="code-func-search" oninput="filterCodeFunctions(this.value)" style="width:100%;font-size:10px" aria-label="Search functions">
           </div>
           <div class="scroll" id="code-func-list" style="flex:1;overflow-y:auto;font-size:10px">
             <div style="padding:20px;text-align:center;color:var(--text-muted)">No functions loaded</div>
@@ -476,14 +476,14 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Data (imports / exports / symbols / strings / sections) ===== -->
       <div class="panel" id="panel-imports">
         <div class="subnav" id="data-subnav">
-          <button class="on" data-sub="imp" onclick="sub('imports','imp')">Imports</button>
-          <button data-sub="exp" onclick="sub('imports','exp')">Exports</button>
-          <button data-sub="sym" onclick="sub('imports','sym')">Symbols</button>
-          <button data-sub="str" onclick="sub('imports','str')">Strings</button>
-          <button data-sub="sec" onclick="sub('imports','sec')">Sections</button>
+          <button class="on" data-sub="imp" onclick="switchSubview('imports','imp')">Imports</button>
+          <button data-sub="exp" onclick="switchSubview('imports','exp')">Exports</button>
+          <button data-sub="sym" onclick="switchSubview('imports','sym')">Symbols</button>
+          <button data-sub="str" onclick="switchSubview('imports','str')">Strings</button>
+          <button data-sub="sec" onclick="switchSubview('imports','sec')">Sections</button>
         </div>
         <div class="subview on" data-sub="imp">
-          <div class="tb"><input placeholder="Search imports..." id="imps-search" oninput="loadImports()" style="width:100%" aria-label="Search imports"><span class="v" id="imps-count"></span></div>
+          <div class="tb"><input placeholder="Search imports..." id="imps-search" oninput="filterImports()" style="width:100%" aria-label="Search imports"><span class="v" id="imps-count"></span></div>
           <div class="scroll"><table class="dtable" id="imp-tbl"><thead><tr><th>Name</th><th>Library</th><th>Risk</th></tr></thead><tbody id="imp-tbody"></tbody></table></div>
         </div>
         <div class="subview" data-sub="exp">
@@ -504,10 +504,10 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Exploit (vulns / paths / ROP / solvers) ===== -->
       <div class="panel" id="panel-exploit">
         <div class="subnav" id="exp-subnav">
-          <button class="on" data-sub="vulns" onclick="sub('exploit','vulns')">Vulns</button>
-          <button data-sub="paths" onclick="sub('exploit','paths')">Attack Paths</button>
-          <button data-sub="rop" onclick="sub('exploit','rop')">ROP</button>
-          <button data-sub="solver" onclick="sub('exploit','solver')">Solvers</button>
+          <button class="on" data-sub="vulns" onclick="switchSubview('exploit','vulns')">Vulns</button>
+          <button data-sub="paths" onclick="switchSubview('exploit','paths')">Attack Paths</button>
+          <button data-sub="rop" onclick="switchSubview('exploit','rop')">ROP</button>
+          <button data-sub="solver" onclick="switchSubview('exploit','solver')">Solvers</button>
         </div>
         <div class="subview on" data-sub="vulns">
           <div id="vulns-empty" class="empty-state"><div class="ico" style="color:var(--green)">&#10003;</div><div class="big">No vulnerable imports detected</div></div>
@@ -708,7 +708,7 @@ const SUB_ONSHOW = {
   'exploit:rop': () => { if (loaded && !document.getElementById('rop-tbody').children.length) searchROP(); },
   'exploit:solver': () => {},
 };
-function sub(panel, name) {
+function switchSubview(panel, name) {
   const p = document.getElementById('panel-' + panel);
   p.querySelectorAll('.subview').forEach(v => v.classList.toggle('on', v.dataset.sub === name));
   p.querySelectorAll('.subnav button').forEach(b => b.classList.toggle('on', b.dataset.sub === name));
@@ -727,16 +727,16 @@ let _autoStream = null;
 function runAutoSolve() {
   if (!loaded) { toast('Load a binary first', 'error'); return; }
   const btn = document.getElementById('auto-btn');
-  const st = document.getElementById('auto-status');
-  const fb = document.getElementById('auto-flag');
-  const at = document.getElementById('auto-attempts');
-  const pr = document.getElementById('auto-proof');
-  const pl = document.getElementById('auto-plan');
+  const statusEl = document.getElementById('auto-status');
+  const flagEl = document.getElementById('auto-flag');
+  const attemptsEl = document.getElementById('auto-attempts');
+  const proofEl = document.getElementById('auto-proof');
+  const planEl = document.getElementById('auto-plan');
 
   if (_autoStream) { _autoStream.close(); _autoStream = null; }
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Working…';
-  fb.style.display = 'none'; document.getElementById('auto-proof-term').style.display = 'none'; at.innerHTML = ''; pl.textContent = '';
-  st.textContent = 'Starting recon…';
+  flagEl.style.display = 'none'; document.getElementById('auto-proof-term').style.display = 'none'; attemptsEl.innerHTML = ''; planEl.textContent = '';
+  statusEl.textContent = 'Starting recon…';
   setStatus('Auto-solving…', true);
 
   const rowId = (name) => 'att-' + name.replace(/[^\w-]/g, '');
@@ -753,29 +753,29 @@ function runAutoSolve() {
   es.onmessage = (m) => {
     let ev; try { ev = JSON.parse(m.data); } catch { return; }
     if (ev.kind === 'capa_running') {
-      st.textContent = 'Running capa capability scan… (first run on this binary can take a while; results are cached)';
+      statusEl.textContent = 'Running capa capability scan… (first run on this binary can take a while; results are cached)';
     } else if (ev.kind === 'recon') {
       const rc = ev.recon || {};
       const capaN = (rc.capa || []).length;
-      st.textContent = rc.arch ? 'Recon: ' + rc.arch + ' ' + (rc.bits || '') + '-bit ' + rc.format : 'Recon complete';
-      pl.textContent = rc.arch
+      statusEl.textContent = rc.arch ? 'Recon: ' + rc.arch + ' ' + (rc.bits || '') + '-bit ' + rc.format : 'Recon complete';
+      planEl.textContent = rc.arch
         ? rc.arch + ' ' + (rc.bits || '') + '-bit ' + rc.format + ' — ' +
           Object.entries(rc.protections || {}).map(([k, v]) => k.split(' ')[0] + ':' + v).join(' ') +
           (capaN ? '\ncapa: ' + capaN + ' capabilities (' + (rc.capa || []).slice(0, 6).join(', ') + (capaN > 6 ? ', …' : '') + ')' : '')
         : '';
     } else if (ev.kind === 'plan') {
       const names = (ev.plan || []).map(p => p.name + '(' + p.score + ')').join('  →  ');
-      pl.textContent += (pl.textContent ? '\n' : '') + 'Plan: ' + (names || '(no strategy applies)');
-      st.textContent = 'Running ' + (ev.plan || []).length + ' strateg' + ((ev.plan || []).length === 1 ? 'y' : 'ies') + '…';
+      planEl.textContent += (planEl.textContent ? '\n' : '') + 'Plan: ' + (names || '(no strategy applies)');
+      statusEl.textContent = 'Running ' + (ev.plan || []).length + ' strateg' + ((ev.plan || []).length === 1 ? 'y' : 'ies') + '…';
     } else if (ev.kind === 'strategy_start') {
-      st.textContent = 'Running ' + ev.name + '  (' + (ev.index + 1) + '/' + ev.total + ')…';
+      statusEl.textContent = 'Running ' + ev.name + '  (' + (ev.index + 1) + '/' + ev.total + ')…';
       const div = document.createElement('div');
       div.className = 'att'; div.id = rowId(ev.name);
       div.innerHTML = '<span class="run"><span class="spin"></span> ' + esc(ev.name) + '</span>' +
         '<span class="msg">' + esc(ev.why || 'running…') + '</span>';
-      at.appendChild(div);
+      attemptsEl.appendChild(div);
     } else if (ev.kind === 'strategy_done') {
-      const div = document.getElementById(rowId(ev.name)) || at.appendChild(document.createElement('div'));
+      const div = document.getElementById(rowId(ev.name)) || attemptsEl.appendChild(document.createElement('div'));
       div.className = 'att'; div.id = rowId(ev.name);
       div.innerHTML = '<span class="' + (ev.ok ? 'ok' : 'no') + '">' + (ev.ok ? '✓' : '✗') + ' ' + esc(ev.name) + '</span>' +
         '<span class="msg">' + esc((ev.detail || '').slice(0, 260)) + '</span>' +
@@ -783,17 +783,17 @@ function runAutoSolve() {
     } else if (ev.kind === 'done') {
       const d = ev.result || {};
       if (d.success) {
-        fb.textContent = d.flag; fb.style.display = '';
-        st.innerHTML = 'Solved via <b>' + esc(d.strategy) + '</b> in ' + d.seconds + 's — click the flag to copy';
+        flagEl.textContent = d.flag; flagEl.style.display = '';
+        statusEl.innerHTML = 'Solved via <b>' + esc(d.strategy) + '</b> in ' + d.seconds + 's — click the flag to copy';
         toast('Flag: ' + d.flag, 'ok');
       } else {
-        st.textContent = 'No flag in ' + (d.seconds || 0) + 's. ' + esc(d.notes || 'every strategy was exhausted.');
+        statusEl.textContent = 'No flag in ' + (d.seconds || 0) + 's. ' + esc(d.notes || 'every strategy was exhausted.');
         toast('Auto-solve found no flag', 'error');
       }
-      if (d.proof) { pr.textContent = d.proof; document.getElementById('auto-proof-term').style.display = 'flex'; }
+      if (d.proof) { proofEl.textContent = d.proof; document.getElementById('auto-proof-term').style.display = 'flex'; }
       finish();
     } else if (ev.kind === 'error') {
-      st.textContent = '⚠ ' + esc(ev.message || 'solver error');
+      statusEl.textContent = '⚠ ' + esc(ev.message || 'solver error');
       toast(ev.message || 'solver error', 'error');
       finish('', true);
     }
@@ -802,7 +802,7 @@ function runAutoSolve() {
     // EventSource fires onerror on normal stream close too — only surface it
     // if we never reached a terminal event.
     if (_autoStream === es && btn.disabled) {
-      st.textContent = '⚠ lost connection to the solver stream';
+      statusEl.textContent = '⚠ lost connection to the solver stream';
       toast('Auto-solve stream disconnected', 'error');
       finish('', true);
     }
@@ -970,10 +970,10 @@ async function loadEntropy() {
     const bar = document.getElementById('entropy-bar');
     bar.innerHTML = d.blocks.map(e => {
       const t = Math.min(e/8, 1);
-      const r = Math.round(0xf3*t + 0x31*(1-t));
+      const red = Math.round(0xf3*t + 0x31*(1-t));
       const g = Math.round(0x8b*(1-t) + 0x32*t);
       const b = Math.round(0xa8*t + 0x44*(1-t));
-      return '<div class="ent-block" style="background:rgb('+r+','+g+','+b+');width:'+(100/d.blocks.length)+'%" title="entropy: '+e.toFixed(2)+'"></div>';
+      return '<div class="ent-block" style="background:rgb('+red+','+g+','+b+');width:'+(100/d.blocks.length)+'%" title="entropy: '+e.toFixed(2)+'"></div>';
     }).join('');
   } catch(e) { /* entropy non-critical */ }
 }
@@ -1033,9 +1033,9 @@ function onShowDisasm() { if (loaded) { updateDisasmFuncs(); loadDisasm(); } }
 // ── Hex viewer ──────────────────────────────────────────────────────
 const HX = { off:0, size:512, mode:'offset', total:0, bytes:new Uint8Array(0),
              baseVa:null, section:'', anchor:null, cursor:0,
-             matches:[], mlen:0, mi:-1, want:null, inited:false };
+             matches:[], mlen:0, mi:-1, seekAddr:null, inited:false };
 
-function hxA(a){ return a==null ? '——' : '0x'+((a>>>0).toString(16)).padStart(8,'0'); }
+function hxFormatAddr(a){ return a==null ? '——' : '0x'+((a>>>0).toString(16)).padStart(8,'0'); }
 function hxCells(i){ return document.querySelectorAll('#hx-grid [data-i="'+i+'"]'); }
 function hxClear(c){ document.querySelectorAll('#hx-grid .'+c).forEach(x=>x.classList.remove(c)); }
 function hxAddrOf(i){
@@ -1067,7 +1067,7 @@ function goToHex(addr){
   document.querySelector('[data-panel="hex"]').click();
   const n = parseInt((''+addr).replace(/^0x/i,''), 16);
   HX.mode = 'vaddr'; document.getElementById('hx-mode').textContent = 'vaddr';
-  HX.want = n;
+  HX.seekAddr = n;
   hxLoad({vaddr:n});
 }
 
@@ -1075,7 +1075,7 @@ function hxGo(){
   const raw = document.getElementById('hx-goto').value.trim(); if(!raw) return;
   const n = /^0x/i.test(raw) ? parseInt(raw,16) : parseInt(raw, /[a-f]/i.test(raw)?16:10);
   if (isNaN(n)) { toast('bad address','error'); return; }
-  HX.want = n;
+  HX.seekAddr = n;
   hxLoad(HX.mode==='vaddr' ? {vaddr:n} : {off:n});
 }
 function hxPage(d){ hxLoad({off: Math.max(0, HX.off + d*HX.size)}); }
@@ -1101,7 +1101,7 @@ function hxRender(){
   const b = HX.bytes; let html = '';
   for (let r=0; r<b.length; r+=16){
     const a = hxAddrOf(HX.off + r);
-    const label = a==null ? '+'+(HX.off+r).toString(16).padStart(8,'0') : hxA(a).slice(2);
+    const label = a==null ? '+'+(HX.off+r).toString(16).padStart(8,'0') : hxFormatAddr(a).slice(2);
     let hx='', asc='';
     for (let k=0;k<16;k++){
       const i=r+k;
@@ -1117,10 +1117,10 @@ function hxRender(){
   g.innerHTML = html || '<div style="color:var(--text-muted);padding:20px">no data</div>';
   hxMarkMatches();
   hxBar();
-  if (HX.want!=null){
-    const rel = (HX.mode==='vaddr' && HX.baseVa!=null) ? (HX.want - HX.baseVa) : (HX.want - HX.off);
+  if (HX.seekAddr!=null){
+    const rel = (HX.mode==='vaddr' && HX.baseVa!=null) ? (HX.seekAddr - HX.baseVa) : (HX.seekAddr - HX.off);
     if (rel>=0 && rel<HX.bytes.length){ HX.anchor=HX.off+rel; hxSel(HX.anchor,HX.anchor); const c=hxCells(rel)[0]; if(c) c.scrollIntoView({block:'center'}); }
-    HX.want = null;
+    HX.seekAddr = null;
   }
 }
 
@@ -1130,7 +1130,7 @@ function hxHover(i){
   hxCells(i).forEach(c=>c.classList.add('hl'));
   const abs=HX.off+i, v=HX.bytes[i], va=hxAddrOf(abs);
   document.getElementById('hx-bar').innerHTML =
-    'off <b>'+hxA(abs)+'</b>   vaddr <b>'+(va==null?'——':hxA(va))+'</b>'+
+    'off <b>'+hxFormatAddr(abs)+'</b>   vaddr <b>'+(va==null?'——':hxFormatAddr(va))+'</b>'+
     (HX.section?'   §<b>'+esc(HX.section)+'</b>':'')+
     '   byte <b>0x'+v.toString(16).padStart(2,'0')+'</b> ('+v+') '+
     ((v>=32&&v<=126)?"'"+esc(String.fromCharCode(v))+"'":'');
@@ -1141,7 +1141,7 @@ function hxSel(aAbs,bAbs){
   const lo=Math.min(aAbs,bAbs), hi=Math.max(aAbs,bAbs);
   for (let i=lo;i<=hi;i++){ const j=i-HX.off; if(j>=0&&j<HX.bytes.length) hxCells(j).forEach(c=>c.classList.add('sel')); }
   const uint=(le,len)=>{ let x=0n; for(let k=0;k<len;k++){ const j=(le?lo+k:lo+len-1-k)-HX.off; if(j<0||j>=HX.bytes.length) return null; x |= BigInt(HX.bytes[j])<<BigInt(8*k); } return x; };
-  const n=hi-lo+1, p=['sel <b>'+hxA(lo)+'</b>–<b>'+hxA(hi)+'</b> ('+n+'B)'];
+  const n=hi-lo+1, p=['sel <b>'+hxFormatAddr(lo)+'</b>–<b>'+hxFormatAddr(hi)+'</b> ('+n+'B)'];
   if (n>=1) p.push('u8 '+uint(true,1));
   if (n>=2) p.push('u16le 0x'+uint(true,2).toString(16));
   if (n>=4) p.push('u32le 0x'+uint(true,4).toString(16)+'  u32be 0x'+uint(false,4).toString(16));
@@ -1154,9 +1154,9 @@ function hxSel(aAbs,bAbs){
 function hxBar(){
   const el=document.getElementById('hx-bar'); if(!el) return;
   el.innerHTML =
-    'range <b>'+hxA(HX.off)+'</b>–<b>'+hxA(HX.off+HX.bytes.length)+'</b> / <b>'+hxA(HX.total)+'</b>'+
+    'range <b>'+hxFormatAddr(HX.off)+'</b>–<b>'+hxFormatAddr(HX.off+HX.bytes.length)+'</b> / <b>'+hxFormatAddr(HX.total)+'</b>'+
     (HX.section?'   §<b>'+esc(HX.section)+'</b>':'')+
-    (HX.baseVa!=null?'   vaddr <b>'+hxA(HX.baseVa)+'</b>':'   <span style="color:var(--orange)">unmapped — file offsets</span>')+
+    (HX.baseVa!=null?'   vaddr <b>'+hxFormatAddr(HX.baseVa)+'</b>':'   <span style="color:var(--orange)">unmapped — file offsets</span>')+
     (HX.matches.length?'   <b>'+HX.matches.length+'</b> match'+(HX.matches.length>1?'es':''):'');
 }
 
@@ -1185,7 +1185,7 @@ async function hxFind(dir){
     if (dir>0){ idx = HX.matches.findIndex(h=>h>HX.off); if(idx<0) idx=0; }
     else { idx = -1; for(let k=HX.matches.length-1;k>=0;k--) if(HX.matches[k]<HX.off){ idx=k; break; } if(idx<0) idx=HX.matches.length-1; }
     HX.mi=idx; nEl.textContent=(idx+1)+'/'+HX.matches.length;
-    HX.want = HX.matches[idx];
+    HX.seekAddr = HX.matches[idx];
     HX.mode='offset'; document.getElementById('hx-mode').textContent='offset';
     hxLoad({off: Math.max(0, HX.matches[idx] - (HX.matches[idx]%16))});
   } catch(e){ toast(e.message,'error'); }
@@ -1219,23 +1219,34 @@ function hxKey(e){
 function onShowHex(){ hxInit(); if (loaded && !HX.total) hxLoad({off:0}); }
 
 // ── Imports ────────────────────────────────────────────────────────────
+let _importsData = [];
+
 async function loadImports() {
   if (!loaded) return;
   try {
     const r = await fetch('/api/imports');
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
-    document.getElementById('imps-count').textContent = data.length + ' imports';
-    const q = (document.getElementById('imps-search').value || '').toLowerCase();
-    const filtered = q ? data.filter(i => i.name.toLowerCase().includes(q)) : data;
-    document.getElementById('imp-tbody').innerHTML = filtered.map(i => {
-      let v = '';
-      if (i.vuln) {
-        const sev = i.vuln[0];
-        v = '<span class="badge badge-'+sev.toLowerCase()+'">'+sev+' \u2014 '+esc(i.vuln[1])+'</span>';
-      }
-      return '<tr><td>'+esc(i.name)+'</td><td style="color:var(--text-dim)">'+esc(i.library||'')+'</td><td>'+v+'</td></tr>';
-    }).join('');
+    _importsData = data;
+    filterImports();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// Filters the already-fetched imports list; no network round-trip. Called
+// on every keystroke in the imports search box.
+function filterImports() {
+  const data = _importsData;
+  document.getElementById('imps-count').textContent = data.length + ' imports';
+  const q = (document.getElementById('imps-search').value || '').toLowerCase();
+  const filtered = q ? data.filter(i => i.name.toLowerCase().includes(q)) : data;
+  document.getElementById('imp-tbody').innerHTML = filtered.map(i => {
+    let v = '';
+    if (i.vuln) {
+      const sev = i.vuln[0];
+      v = '<span class="badge badge-'+sev.toLowerCase()+'">'+sev+' \u2014 '+esc(i.vuln[1])+'</span>';
+    }
+    return '<tr><td>'+esc(i.name)+'</td><td style="color:var(--text-dim)">'+esc(i.library||'')+'</td><td>'+v+'</td></tr>';
+  }).join('');
 }
 
 function onShowImports() { if (loaded) loadImports(); }
@@ -1246,6 +1257,7 @@ async function loadStrings() {
   try {
     const q = document.getElementById('str-search').value || '';
     const r = await fetch('/api/strings?min_len=4'+(q?'&search='+encodeURIComponent(q):''));
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('str-count').textContent = data.length+' strings';
     document.getElementById('str-container').innerHTML = data.map(s =>
@@ -1261,6 +1273,7 @@ async function loadMemoryMap() {
   if (!loaded) return;
   try {
     const r = await fetch('/api/sections');
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('mem-tbody').innerHTML = data.map(s =>
       '<tr><td class="sect-name">'+esc(s.name)+'</td><td class="addr">0x'+s.vaddr.toString(16)+'</td><td>'+(s.size/1024).toFixed(1)+' KB</td><td style="color:var(--text-dim)">0x'+s.flags.toString(16)+'</td><td>'+(s.entropy?s.entropy.toFixed(2):'-')+'</td></tr>'
@@ -1275,6 +1288,7 @@ async function loadVulns() {
   if (!loaded) return;
   try {
     const r = await fetch('/api/vulns');
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     const el = document.getElementById('vulns-list');
     const empty = document.getElementById('vulns-empty');
@@ -1305,25 +1319,32 @@ function setCodeView(mode) {
 
 let _codeCurrentAddr = null;
 
-async function loadCodeFunctions(query) {
+async function loadCodeFunctions() {
   if (!loaded) return;
   try {
     const r = await fetch('/api/disasm/functions');
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     _codeFunctions = data.functions || [];
-    const q = (query||'').toLowerCase();
-    const filtered = q ? _codeFunctions.filter(f => f.name.toLowerCase().includes(q)) : _codeFunctions;
-    document.getElementById('code-func-list').innerHTML = filtered.map(f =>
-      '<div class="code-func-item" data-addr="'+f.address+'" onclick="showCodeFunction(this.dataset.addr)" style="padding:4px 8px;cursor:pointer;display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap">' +
-        '<span style="color:var(--cyan);font-weight:500">'+esc(f.name)+'</span>' +
-        '<span style="color:var(--blue);font-size:9px;margin-left:auto">'+esc(f.address)+'</span>' +
-      '</div>'
-    ).join('');
-    if (!query) {
-      const first = filtered[0];
-      if (first) showCodeFunction(first.address);
-    }
+    filterCodeFunctions(document.getElementById('code-func-search').value);
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// Filters the already-fetched functions list; no network round-trip. Called
+// on every keystroke in the Code-tab function search box.
+function filterCodeFunctions(query) {
+  const q = (query||'').toLowerCase();
+  const filtered = q ? _codeFunctions.filter(f => f.name.toLowerCase().includes(q)) : _codeFunctions;
+  document.getElementById('code-func-list').innerHTML = filtered.map(f =>
+    '<div class="code-func-item" data-addr="'+f.address+'" onclick="showCodeFunction(this.dataset.addr)" style="padding:4px 8px;cursor:pointer;display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap">' +
+      '<span style="color:var(--cyan);font-weight:500">'+esc(f.name)+'</span>' +
+      '<span style="color:var(--blue);font-size:9px;margin-left:auto">'+esc(f.address)+'</span>' +
+    '</div>'
+  ).join('');
+  if (!query) {
+    const first = filtered[0];
+    if (first) showCodeFunction(first.address);
+  }
 }
 
 async function showCodeFunction(vaddrHex) {
@@ -1410,7 +1431,7 @@ async function showCodeFunction(vaddrHex) {
         insns.map(insn => {
           const addr = insn.address;
           const bkg = blockMap[addr] || '';
-          const isVulnCall = calls.find(c => c.from === addr && c.name);
+          const vulnCall = calls.find(c => c.from === addr && c.name);
           const usedVars = stackVars.filter(v =>
             v.accesses && v.accesses.some(a => a.at === addr)
           );
@@ -1424,7 +1445,7 @@ async function showCodeFunction(vaddrHex) {
               esc(insn.mnemonic+' '+insn.op_str) +
             '</td>' +
             '<td style="padding:1px 8px;font-size:9px">' +
-              (isVulnCall ? '<span style="color:var(--red)">\u25B6 '+esc(isVulnCall.name)+'</span>' : '') +
+              (vulnCall ? '<span style="color:var(--red)">\u25B6 '+esc(vulnCall.name)+'</span>' : '') +
               (varNote ? '<span style="color:rgba(189,147,249,.9);margin-left:4px">\u2190 '+varNote+'</span>' : '') +
             '</td>' +
           '</tr>';
@@ -1437,7 +1458,7 @@ async function showCodeFunction(vaddrHex) {
 }
 
 function onShowCode() {
-  if (loaded) loadCodeFunctions(document.getElementById('code-func-search').value);
+  if (loaded) loadCodeFunctions();
 }
 
 // Switch to Code tab and search for a function
@@ -1464,7 +1485,7 @@ function showCodeWithSearch(query) {
   const searchInput = document.getElementById('code-func-search');
   if (searchInput) {
     searchInput.value = query;
-    loadCodeFunctions(query);
+    loadCodeFunctions();
   }
 }
 
@@ -1494,7 +1515,7 @@ const PATH_SOLVER_MAP = {
 };
 
 function jumpToSolver(solverType) {
-  sub('exploit', 'solver');
+  switchSubview('exploit', 'solver');
   const sel = document.getElementById('solver-type');
   sel.value = solverType;
   if (loaded) runSolver(document.getElementById('solver-btn'));
@@ -1507,11 +1528,12 @@ async function loadExploitPaths(btn) {
   setStatus('Analyzing exploit paths\u2026', true);
   try {
     const r = await fetch('/api/vuln-hints');
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     const prot = data.protections || {};
     const funcs = data.vulnerable_functions || [];
     const paths = data.paths || [];
-    const sum = data.summary || {};
+    const summary = data.summary || {};
     const sites = data.overflow_sites || [];
     let html = '';
 
@@ -1525,17 +1547,17 @@ async function loadExploitPaths(btn) {
 
     // Binary facts
     const facts = [];
-    if (sum.arch) facts.push('arch: '+esc(sum.arch));
-    if (sum.static) facts.push('<span style="color:var(--yellow)">statically linked</span>');
-    if (sum.binsh) facts.push('&quot;/bin/sh&quot; @ <span style="color:var(--green)">'+esc(sum.binsh.vaddr||sum.binsh.offset)+'</span>');
-    const g = sum.gadgets || {};
+    if (summary.arch) facts.push('arch: '+esc(summary.arch));
+    if (summary.static) facts.push('<span style="color:var(--yellow)">statically linked</span>');
+    if (summary.binsh) facts.push('&quot;/bin/sh&quot; @ <span style="color:var(--green)">'+esc(summary.binsh.vaddr||summary.binsh.offset)+'</span>');
+    const g = summary.gadgets || {};
     for (const [k,v] of Object.entries(g)) facts.push('<span style="color:var(--text-muted)">'+esc(k)+'</span> @ <span style="color:var(--blue)">'+esc(v)+'</span>');
     if (facts.length) {
       html += '<div style="font-size:10px;font-family:var(--font-mono);line-height:1.7;margin-bottom:10px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border)">'+facts.join('<br>')+'</div>';
     }
-    if ((sum.win_functions||[]).length) {
+    if ((summary.win_functions||[]).length) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">🏆 Win / backdoor functions</div>';
-      for (const w of sum.win_functions) {
+      for (const w of summary.win_functions) {
         html += '<div style="padding:5px 10px;margin-bottom:4px;background:rgba(63,185,80,.06);border-left:3px solid var(--green);border-radius:4px;font-size:11px">' +
           '<a href="#" data-name="'+escAttr(w.name)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--green);font-weight:600;text-decoration:none">'+esc(w.name)+'</a>' +
           ' <span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(w.address)+'</span>' +
@@ -1598,7 +1620,7 @@ async function loadExploitPaths(btn) {
       }
     }
 
-    if (!funcs.length && !paths.length && !sites.length && !(sum.win_functions||[]).length) {
+    if (!funcs.length && !paths.length && !sites.length && !(summary.win_functions||[]).length) {
       html += '<div style="text-align:center;padding:30px 0;color:var(--text-muted)">No obvious vulnerability primitives found</div>';
     }
 
@@ -1618,6 +1640,7 @@ async function scanROP() {
   setStatus('Scanning ROP gadgets\u2026', true);
   try {
     const r = await fetch('/api/rop/scan',{method:'POST'});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('rop-status').textContent = data.total+' gadgets';
     const sel = document.getElementById('rop-class');
@@ -1635,6 +1658,7 @@ async function searchROP() {
   const cls = document.getElementById('rop-class').value;
   try {
     const r = await fetch('/api/rop/gadgets?query='+encodeURIComponent(q)+'&cls='+encodeURIComponent(cls));
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('rop-tbody').innerHTML = data.gadgets.map(g =>
       '<tr><td class="addr">'+g.addr+'</td><td style="font-size:11px">'+esc(g.text)+'</td>'+
@@ -1679,6 +1703,7 @@ async function loadXrefs() {
   document.getElementById('xref-status').textContent = 'Looking up\u2026';
   try {
     const r = await fetch('/api/xrefs?vaddr='+encodeURIComponent(addr));
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('xref-callers').innerHTML = data.callers.length
       ? data.callers.map(c => '<tr><td class="addr" onclick="goToDisasm(\''+c.from+'\')">'+c.from+'</td><td style="color:var(--text-dim)">'+c.type+'</td></tr>').join('')
@@ -1696,6 +1721,7 @@ async function buildXrefs() {
   document.getElementById('xref-status').textContent = 'Building xrefs\u2026';
   try {
     const r = await fetch('/api/xrefs/build?vaddr='+encodeURIComponent(addr)+'&size=4096',{method:'POST'});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}
     const data = await r.json();
     document.getElementById('xref-status').textContent = 'Built from '+data.count+' instructions';
     loadXrefs();
@@ -1837,7 +1863,7 @@ function showConfirm(onConfirm) {
   const overlay = document.getElementById('confirm-overlay');
   const cancelBtn = document.getElementById('confirm-cancel');
   const okBtn = document.getElementById('confirm-ok');
-  const focusFoci = [cancelBtn, okBtn];
+  const focusables = [cancelBtn, okBtn];
   const prevFocus = document.activeElement;
   overlay.classList.add('show');
   cancelBtn.focus();
@@ -1854,8 +1880,8 @@ function showConfirm(onConfirm) {
     if (e.key === 'Escape') { close(); return; }
     if (e.key === 'Tab') {
       e.preventDefault();
-      const i = focusFoci.indexOf(document.activeElement);
-      focusFoci[(i + (e.shiftKey ? -1 : 1) + focusFoci.length) % focusFoci.length].focus();
+      const i = focusables.indexOf(document.activeElement);
+      focusables[(i + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length].focus();
     }
   }
   function onOk() { close(); onConfirm(); }

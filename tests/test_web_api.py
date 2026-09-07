@@ -118,14 +118,51 @@ def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
     # Untrusted names land in a data-* attribute (escAttr), read back via
     # dataset in the handler — never string-concatenated into the inline
     # handler's JS-string literal.
-    assert "data-name=\"'+escAttr(w.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
-    assert "data-name=\"'+escAttr(s.function)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
-    assert "data-name=\"'+escAttr(f.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\"" in resp.text
+    win_link = "data-name=\"'+escAttr(w.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
+    ovf_link = "data-name=\"'+escAttr(s.function)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
+    vuln_link = "data-name=\"'+escAttr(f.name)+'\" onclick=\"showCodeWithSearch(this.dataset.name);return false\""
+    assert win_link in resp.text
+    assert ovf_link in resp.text
+    assert vuln_link in resp.text
     # The old vulnerable pattern — the untrusted name spliced straight into
     # the quoted inline-handler argument — must be gone from all 3 sites.
     assert "onclick=\"showCodeWithSearch(\\'\"+esc(w.name)+\"\\');return false\"" not in resp.text
     assert "onclick=\"showCodeWithSearch(\\'\"+esc(s.function)+\"\\');return false\"" not in resp.text
     assert "onclick=\"showCodeWithSearch(\\'\"+esc(f.name)+\"\\');return false\"" not in resp.text
+
+
+def test_index_response_ok_guard_covers_every_load_fetcher() -> None:
+    resp = TestClient(server.app).get("/")
+    guard = "if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}"
+    # 3 pre-existing sites (capa, solver generate, solver execute) + the 10
+    # fetchers this test locks: imports, strings, sections/memory-map, vulns,
+    # code-functions, vuln-hints, ROP scan, ROP gadget search, xrefs lookup,
+    # xrefs build.
+    assert resp.text.count(guard) == 13
+
+
+def test_index_search_inputs_filter_client_side_without_a_fetch() -> None:
+    resp = TestClient(server.app).get("/")
+    # Both search boxes drive a pure-local filter/render helper on every
+    # keystroke — the network fetch happens once, on load/tab-open, not here.
+    assert 'oninput="filterCodeFunctions(this.value)"' in resp.text
+    assert 'oninput="filterImports()"' in resp.text
+    assert "function filterCodeFunctions(query) {" in resp.text
+    assert "function filterImports() {" in resp.text
+    # The render helpers are reachable without an intervening fetch() call —
+    # confirm neither oninput handler survives as a direct fetch trigger.
+    assert 'oninput="loadCodeFunctions(this.value)"' not in resp.text
+    assert 'oninput="loadImports()"' not in resp.text
+
+
+def test_index_subtab_switch_uses_a_non_ambiguous_name() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "function switchSubview(panel, name) {" in resp.text
+    assert "onclick=\"switchSubview('imports','imp')\"" in resp.text
+    assert "onclick=\"switchSubview('exploit','vulns')\"" in resp.text
+    # the old name must not survive as a callable identifier
+    assert "function sub(panel, name) {" not in resp.text
+    assert "onclick=\"sub(" not in resp.text
 
 
 def test_read_endpoint_requires_a_loaded_binary(monkeypatch: pytest.MonkeyPatch) -> None:
