@@ -438,6 +438,24 @@ def test_successful_upload_removes_the_pre_copy_temp_file(app_client, monkeypatc
     assert not os.path.exists(seen["unlinked"])
 
 
+def test_upload_cleanup_survives_an_unlink_failure(app_client, monkeypatch, sample_path) -> None:
+    """If the pre-copy temp file can't be removed (permissions, already
+    gone, ...), the load still succeeds — the cleanup failure is logged,
+    not raised."""
+
+    def failing_unlink(path, *a, **k):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(server.os, "unlink", failing_unlink)
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 200
+
+
+def test_get_overflow_sites_degrades_to_empty_list_without_disasm() -> None:
+    assert Session().get_overflow_sites() == []
+
+
 # ── Per-binary analysis cache ────────────────────────────────────────
 
 
