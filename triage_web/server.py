@@ -119,6 +119,16 @@ def _get_loader() -> BinaryLoader:
     return _session.require_loader()
 
 
+def _parse_hex_param(value: str, field: str) -> int:
+    """Parse a base-16 query param (``0x``-prefix optional), raising a clean
+    400 naming the offending field and value instead of letting a bare
+    ``ValueError`` surface as a non-JSON 500."""
+    try:
+        return int(value, 16)
+    except ValueError:
+        raise HTTPException(400, f"Invalid hex value for '{field}': {value!r}") from None
+
+
 def _size_to_next_function(loader: BinaryLoader, addr: int) -> int:
     """Byte span from ``addr`` to the next function boundary, capped at 256."""
     next_addr = addr + 256
@@ -278,9 +288,18 @@ async def api_load(path: str = Form(""), file: UploadFile = File(None)):
                 import shutil
 
                 shutil.copy2(target, dest)
-                target = dest
             except Exception as e:
                 log.debug("could not stage upload at %s: %s — using temp path", dest, e)
+            else:
+                # Staged copy succeeded and is becoming the active target —
+                # the pre-copy temp file is now redundant. Only unlink here,
+                # on the success path: on a staging failure `target` stays
+                # the file actually in use and must not be deleted.
+                try:
+                    os.unlink(target)
+                except OSError as e:
+                    log.debug("could not remove pre-copy temp file %s: %s", target, e)
+                target = dest
         else:
             log.debug("rejected unsafe staged-upload filename: %r — using temp path", file.filename)
     elif path:
@@ -391,6 +410,10 @@ def api_segments():
 @app.get("/api/strings")
 def api_strings(min_len: int = 4, search: str = ""):
     loader = _get_loader()
+    # Out-of-range values (negative, zero, absurdly large) produce a
+    # degenerate regex or a silently-empty result downstream — clamp to a
+    # sane range before it reaches the loader.
+    min_len = max(1, min(min_len, 256))
     strs = loader.get_strings(min_len=min_len)
     if search:
         strs = [s for s in strs if search.lower() in s.lower()]
@@ -412,11 +435,11 @@ def api_hex(off: str | None = None, vaddr: str | None = None, size: int = 512):
     size = max(16, min(int(size), 8192))
 
     if vaddr is not None:
-        va = int(vaddr, 16)
+        va = _parse_hex_param(vaddr, "vaddr")
         o = loader.vaddr_to_offset(va)
         base = o if o >= 0 else (va if 0 <= va < total else 0)
     else:
-        base = int(off, 16) if off else 0
+        base = _parse_hex_param(off, "off") if off else 0
     base = max(0, min(base, max(0, total - 1)))
 
     data = bytes(raw[base : base + size])
@@ -464,7 +487,7 @@ def api_hex_search(q: str, kind: str = "auto", limit: int = 500):
 def api_disasm(vaddr: str = "0x0", size: int = 256):
     loader = _get_loader()
     disasm = _session.require_disasm()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
     data = loader.read_vaddr(addr, size)
     if not data:
         return {"insns": [], "address": addr, "count": 0}
@@ -520,7 +543,7 @@ def api_disasm_functions():
 def api_disasm_function(vaddr: str = "0x0", size: int = 0):
     loader = _get_loader()
     disasm = _session.require_disasm()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
 
     known_calls = build_known_calls(loader)
 
@@ -539,7 +562,7 @@ def api_disasm_function(vaddr: str = "0x0", size: int = 0):
 def api_disasm_variables(vaddr: str = "0x0", size: int = 0):
     loader = _get_loader()
     disasm = _session.require_disasm()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
 
     known_calls = build_known_calls(loader)
 
@@ -564,7 +587,7 @@ def api_disasm_decompile(vaddr: str = "0x0"):
     Returns pseudo-C decompilation of the function at the given address."""
     loader = _get_loader()
     disasm = _session.require_disasm()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
 
     known_calls = build_known_calls(loader)
 
@@ -600,7 +623,7 @@ def api_disasm_decompile(vaddr: str = "0x0"):
 @app.get("/api/xrefs")
 def api_xrefs(vaddr: str = "0x0"):
     xrefs = _session.require_xrefs()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
     callers = [{"from": hex(f), "type": t} for f, t in xrefs.get_callers(addr)]
     callees = [{"to": hex(t), "type": typ} for t, typ in xrefs.get_callees(addr)]
     return {"address": vaddr, "callers": callers, "callees": callees}
@@ -611,7 +634,7 @@ def api_xrefs_build(vaddr: str = "0x0", size: int = 4096):
     loader = _get_loader()
     xrefs = _session.require_xrefs()
     disasm = _session.require_disasm()
-    addr = int(vaddr, 16)
+    addr = _parse_hex_param(vaddr, "vaddr")
     data = loader.read_vaddr(addr, size)
     if not data:
         return {"count": 0, "status": "no data at address"}
@@ -749,15 +772,20 @@ def api_solver(solver_type: str = "angr_find_flag"):
     known_calls = build_known_calls(loader) if disasm else {}
     ov_sites = overflow_sites(loader, disasm, known_calls, loader.bits == 64) if disasm else []
     overflow_offset = ov_sites[0]["est_offset_to_ret"] if ov_sites else None
-    code = generate_solver(
-        solver_type, loader.path, loader.arch, loader.bits, pop_rdi=pop_rdi, overflow_offset=overflow_offset
-    )
+    try:
+        code = generate_solver(
+            solver_type, loader.path, loader.arch, loader.bits, pop_rdi=pop_rdi, overflow_offset=overflow_offset
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     return {"code": code, "type": solver_type, "arch": loader.arch, "bits": loader.bits}
 
 
 @app.post("/api/solver/execute")
 def api_solver_execute(body: dict):
     code = body.get("code", "")
+    if not isinstance(code, str):
+        raise HTTPException(400, "'code' must be a string")
     result = execute_solver(code)
     return result
 
@@ -1111,32 +1139,37 @@ def api_vuln_hints():
 def api_exploit_techniques():
     techniques = []
     mitre_to_funcs = {}
+    # Narrow: only the "no binary loaded" case (require_loader's own 400)
+    # gets the documented no-binary fallback below. Any other exception in
+    # the body is allowed to propagate instead of being silently reported
+    # as this same fallback, which would mask a real bug as success.
     try:
         loader = _get_loader()
-        for imp in loader.get_imports():
-            fname = imp["name"]
-            if fname in MITRE_VULN_MAP:
-                info = MITRE_VULN_MAP[fname]
-                tid = info["tid"]
-                mitre_to_funcs.setdefault(tid, []).append(fname)
-        has_nx = True
-        is_pe = loader.fmt == loader.FMT_PE
-        try:
-            for s in loader.get_sections():
-                fl = s.get("flags", 0) or 0
-                if is_pe:  # PE section Characteristics
-                    writable = bool(fl & 0x80000000)  # IMAGE_SCN_MEM_WRITE
-                    executable = bool(fl & 0x20000000)  # IMAGE_SCN_MEM_EXECUTE
-                else:  # ELF sh_flags
-                    writable, executable = bool(fl & 0x1), bool(fl & 0x4)  # SHF_WRITE / SHF_EXECINSTR
-                if ".text" in s.get("name", "") and not executable:
-                    has_nx = False
-                if writable and executable:
-                    has_nx = False
-        except Exception as e:
-            log.debug("NX heuristic from section flags failed: %s", e)
-    except Exception:
+    except HTTPException:
         return {"techniques": EXPLOIT_TECHNIQUES, "count": len(EXPLOIT_TECHNIQUES)}
+
+    for imp in loader.get_imports():
+        fname = imp["name"]
+        if fname in MITRE_VULN_MAP:
+            info = MITRE_VULN_MAP[fname]
+            tid = info["tid"]
+            mitre_to_funcs.setdefault(tid, []).append(fname)
+    has_nx = True
+    is_pe = loader.fmt == loader.FMT_PE
+    try:
+        for s in loader.get_sections():
+            fl = s.get("flags", 0) or 0
+            if is_pe:  # PE section Characteristics
+                writable = bool(fl & 0x80000000)  # IMAGE_SCN_MEM_WRITE
+                executable = bool(fl & 0x20000000)  # IMAGE_SCN_MEM_EXECUTE
+            else:  # ELF sh_flags
+                writable, executable = bool(fl & 0x1), bool(fl & 0x4)  # SHF_WRITE / SHF_EXECINSTR
+            if ".text" in s.get("name", "") and not executable:
+                has_nx = False
+            if writable and executable:
+                has_nx = False
+    except Exception as e:
+        log.debug("NX heuristic from section flags failed: %s", e)
 
     for t in EXPLOIT_TECHNIQUES:
         t_copy = dict(t)

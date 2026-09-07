@@ -3,6 +3,8 @@ happy-path smoke suite."""
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -334,3 +336,89 @@ def test_capa_wraps_an_analysis_failure_as_500(app_client, monkeypatch, crackme_
     r = app_client.post("/api/capa")
     assert r.status_code == 500
     assert "CAPA analysis failed" in r.json()["detail"]
+
+
+# ── Hex-param validation / min_len clamp ─────────────────────────────
+
+
+def test_malformed_hex_vaddr_is_400_not_500(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    r = app_client.get("/api/disasm", params={"vaddr": "not-hex"})
+    assert r.status_code == 400
+    assert "vaddr" in r.json()["detail"]
+
+
+def test_malformed_hex_off_on_hex_window_is_400(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    r = app_client.get("/api/hex", params={"off": "zz"})
+    assert r.status_code == 400
+    assert "off" in r.json()["detail"]
+
+
+def test_out_of_range_min_len_does_not_500(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    r = app_client.get("/api/strings", params={"min_len": -5})
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+# ── Solver endpoints ──────────────────────────────────────────────────
+
+
+def test_unknown_solver_type_is_400_not_500(app_client, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    r = app_client.get("/api/solver", params={"solver_type": "not_a_real_solver"})
+    assert r.status_code == 400
+    assert "not_a_real_solver" in r.json()["detail"]
+
+
+def test_solver_execute_rejects_non_string_code(app_client) -> None:
+    r = app_client.post("/api/solver/execute", json={"code": None})
+    assert r.status_code == 400
+    assert "code" in r.json()["detail"]
+
+
+def test_solver_execute_runs_a_valid_string(app_client) -> None:
+    r = app_client.post("/api/solver/execute", json={"code": ""})
+    assert r.status_code == 200
+    assert r.json()["stderr"] == "No code provided"
+
+
+# ── Exploit-techniques narrow catch ───────────────────────────────────
+
+
+def test_exploit_techniques_no_binary_still_returns_fallback(app_client) -> None:
+    r = app_client.get("/api/exploit-techniques")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == len(body["techniques"])
+
+
+def test_exploit_techniques_real_error_is_not_masked_as_fallback(app_client, monkeypatch, sample_path) -> None:
+    app_client.post("/api/load", data={"path": str(sample_path)})
+    monkeypatch.setattr(
+        server._session.loader,
+        "get_imports",
+        lambda: (_ for _ in ()).throw(RuntimeError("import table gone")),
+    )
+    with pytest.raises(RuntimeError):
+        app_client.get("/api/exploit-techniques")
+
+
+# ── Upload temp-file cleanup ──────────────────────────────────────────
+
+
+def test_successful_upload_removes_the_pre_copy_temp_file(app_client, monkeypatch, sample_path) -> None:
+    seen = {}
+    real_unlink = server.os.unlink
+
+    def tracking_unlink(path, *a, **k):
+        seen["unlinked"] = path
+        return real_unlink(path, *a, **k)
+
+    monkeypatch.setattr(server.os, "unlink", tracking_unlink)
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 200
+    assert "unlinked" in seen
+    assert not os.path.exists(seen["unlinked"])
