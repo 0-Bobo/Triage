@@ -63,6 +63,29 @@ def test_ret2libc_falls_back_to_runtime_gadget_search_when_pop_rdi_unknown() -> 
     assert "OFFSET  = 64" in src
 
 
+# ── one_gadget_rce: real pop_rdi / overflow_offset wiring ───────────────
+
+
+def test_one_gadget_rce_bakes_a_real_pop_rdi_and_offset() -> None:
+    src = solvers.generate_solver(
+        "one_gadget_rce", "./target.bin", "x86_64", 64, pop_rdi=0x401234, overflow_offset=40
+    )
+    ast.parse(src)
+    compile(src, "<one_gadget_rce:known>", "exec")
+    assert "POP_RDI = 0x401234" in src
+    assert "OFFSET  = 40" in src
+    assert "POP_RDI = 0x0" not in src
+
+
+def test_one_gadget_rce_falls_back_to_runtime_gadget_search_when_pop_rdi_unknown() -> None:
+    src = solvers.generate_solver("one_gadget_rce", "./target.bin", "x86_64", 64)
+    ast.parse(src)
+    compile(src, "<one_gadget_rce:unknown>", "exec")
+    assert "POP_RDI = 0x0" not in src
+    assert 'rop.find_gadget(["pop rdi", "ret"])' in src
+    assert "OFFSET  = 64" in src
+
+
 def test_other_generators_unaffected_by_the_new_trailing_kwargs() -> None:
     for solver_id in sorted(solvers.SOLVER_GENERATORS):
         src = solvers.generate_solver(solver_id, "./target.bin", "x86_64", 64)
