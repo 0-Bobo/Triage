@@ -177,6 +177,10 @@ def _safe_staged_upload_path(filename: str) -> str | None:
     """
     normalized = filename.replace("\\", "/").replace("\x00", "")
     safe_name = os.path.basename(normalized) or "upload"
+    # Defense-in-depth for the shell interpolation this basename eventually
+    # reaches in the autopwn WSL/POSIX bridge: neutralize shell metacharacters
+    # (backtick, $, (, ), ;, quotes, |, &) instead of rejecting the upload.
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", safe_name)
     dest = os.path.join(tempfile.gettempdir(), "triage_" + safe_name)
     tempdir = Path(tempfile.gettempdir()).resolve()
     resolved = Path(dest).resolve()

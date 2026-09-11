@@ -184,6 +184,23 @@ def test_upload_traversal_filename_is_sanitized_to_temp_basename(app_client, sam
         staged.unlink(missing_ok=True)
 
 
+def test_safe_staged_upload_path_neutralizes_shell_metacharacters() -> None:
+    import re as _re
+
+    dest = server._safe_staged_upload_path("poc'; touch pwned; echo '.elf")
+    assert dest is not None
+    basename = os.path.basename(dest)
+    assert _re.fullmatch(r"[A-Za-z0-9._-]+", basename)
+
+
+def test_safe_staged_upload_path_is_unchanged_for_a_normal_filename() -> None:
+    import tempfile as _tempfile
+
+    assert server._safe_staged_upload_path("upload.bin") == os.path.join(
+        _tempfile.gettempdir(), "triage_upload.bin"
+    )
+
+
 def test_safe_staged_upload_path_resolves_a_traversal_name_inside_tempdir() -> None:
     import tempfile
     from pathlib import Path
@@ -200,9 +217,13 @@ def test_safe_staged_upload_path_rejects_a_bypassed_basename(monkeypatch) -> Non
     # Three ".." segments: one is absorbed by the "triage_" prefix on the first
     # joined component, the other two pop back past the temp directory itself —
     # proving the resolve-based guard independently blocks the escape even if
-    # os.path.basename were ever bypassed by a future refactor.
+    # os.path.basename AND the metacharacter-sanitization regex were both
+    # ever bypassed by a future refactor. The regex bypass is needed here
+    # because sanitization also neutralizes the path separators this escape
+    # relies on, so without it the escape would already be defused upstream.
     escape = _os.sep.join([".."] * 3) + _os.sep + "evil.bin"
     monkeypatch.setattr(_os.path, "basename", lambda _p: escape)
+    monkeypatch.setattr(server.re, "sub", lambda _pattern, _repl, s: s)
     assert server._safe_staged_upload_path("evil.bin") is None
 
 
