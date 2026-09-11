@@ -4,6 +4,7 @@ happy-path smoke suite."""
 from __future__ import annotations
 
 import os
+import threading
 
 import pytest
 from fastapi import HTTPException
@@ -55,6 +56,44 @@ def test_session_reset_closes_the_previous_loader() -> None:
     s.reset(loader=None, disasm=None, rop=None, xrefs=None, path=None, filename=None)
     assert closed == [True]
     assert s.loader is None and s.filename is None
+
+
+def test_session_reset_is_lock_guarded_against_concurrent_readers() -> None:
+    """One thread hammers reset() with distinct sentinel loader/disasm
+    objects per call while another thread reads loader/disasm together.
+    Without the lock, a reader can catch reset()'s field-by-field setattr
+    loop mid-flight and observe a pair mixing objects from two different
+    calls; with the lock, every observed pair is either the untouched
+    initial state or a pair some single reset() call actually wrote."""
+    s = Session()
+    iterations = 100
+    expected_pairs = {(None, None)}
+    observed_pairs = []
+    stop = threading.Event()
+
+    def make_loader():
+        return type("StubLoader", (), {"close": lambda self: None})()
+
+    def resetter():
+        for _ in range(iterations):
+            loader, disasm = make_loader(), object()
+            expected_pairs.add((loader, disasm))
+            s.reset(loader=loader, disasm=disasm, rop=None, xrefs=None, path=None, filename=None)
+        stop.set()
+
+    def reader():
+        while not stop.is_set():
+            observed_pairs.append((s.loader, s.disasm))
+
+    t_read = threading.Thread(target=reader)
+    t_reset = threading.Thread(target=resetter)
+    t_read.start()
+    t_reset.start()
+    t_reset.join()
+    t_read.join()
+
+    assert observed_pairs  # sanity: the reader actually observed something
+    assert all(pair in expected_pairs for pair in observed_pairs)
 
 
 # ── /api/load ─────────────────────────────────────────────────────────

@@ -6,7 +6,8 @@ import platform
 import re
 import sys
 import tempfile
-from dataclasses import dataclass, fields
+import threading
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -106,14 +107,22 @@ class Session:
     filename: str | None = None
     _known_calls_cache: dict | None = None
     _overflow_sites_cache: list | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def reset(self, **values: object) -> None:
-        """Close the previous binary and replace the whole session."""
-        if self.loader is not None:
-            self.loader.close()
-        known = {f.name for f in fields(self)}
-        for name in known:
-            setattr(self, name, values.get(name))
+        """Close the previous binary and replace the whole session.
+
+        Guarded by a lock: sync FastAPI handlers run in a real OS
+        threadpool, and the frontend fires several concurrent fetches
+        right after every load, so a reader could otherwise observe a
+        torn mix of fields from two overlapping reset() calls.
+        """
+        with self._lock:
+            if self.loader is not None:
+                self.loader.close()
+            known = {f.name for f in fields(self) if f.name != "_lock"}
+            for name in known:
+                setattr(self, name, values.get(name))
 
     def get_known_calls(self) -> dict:
         """Address→name map for known calls (imports + local functions),
