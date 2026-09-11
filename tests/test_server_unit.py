@@ -4,6 +4,7 @@ happy-path smoke suite."""
 from __future__ import annotations
 
 import os
+import threading
 
 import pytest
 from fastapi import HTTPException
@@ -55,6 +56,44 @@ def test_session_reset_closes_the_previous_loader() -> None:
     s.reset(loader=None, disasm=None, rop=None, xrefs=None, path=None, filename=None)
     assert closed == [True]
     assert s.loader is None and s.filename is None
+
+
+def test_session_reset_is_lock_guarded_against_concurrent_readers() -> None:
+    """One thread hammers reset() with distinct sentinel loader/disasm
+    objects per call while another thread reads loader/disasm together.
+    Without the lock, a reader can catch reset()'s field-by-field setattr
+    loop mid-flight and observe a pair mixing objects from two different
+    calls; with the lock, every observed pair is either the untouched
+    initial state or a pair some single reset() call actually wrote."""
+    s = Session()
+    iterations = 100
+    expected_pairs = {(None, None)}
+    observed_pairs = []
+    stop = threading.Event()
+
+    def make_loader():
+        return type("StubLoader", (), {"close": lambda self: None})()
+
+    def resetter():
+        for _ in range(iterations):
+            loader, disasm = make_loader(), object()
+            expected_pairs.add((loader, disasm))
+            s.reset(loader=loader, disasm=disasm, rop=None, xrefs=None, path=None, filename=None)
+        stop.set()
+
+    def reader():
+        while not stop.is_set():
+            observed_pairs.append((s.loader, s.disasm))
+
+    t_read = threading.Thread(target=reader)
+    t_reset = threading.Thread(target=resetter)
+    t_read.start()
+    t_reset.start()
+    t_reset.join()
+    t_read.join()
+
+    assert observed_pairs  # sanity: the reader actually observed something
+    assert all(pair in expected_pairs for pair in observed_pairs)
 
 
 # ── /api/load ─────────────────────────────────────────────────────────
@@ -243,6 +282,60 @@ def test_cors_origins_defaults_to_localhost_when_env_unset(monkeypatch) -> None:
 def test_cors_origins_honors_the_env_override(monkeypatch) -> None:
     monkeypatch.setenv("TRIAGE_CORS_ORIGINS", "https://a.example, https://b.example")
     assert server._cors_origins() == ["https://a.example", "https://b.example"]
+
+
+# ── CSRF / Origin protection ─────────────────────────────────────────
+#
+# CORS above blocks a cross-origin script from *reading* a response, not
+# from *sending* a request — a plain HTML <form> POST needs no preflight
+# and reaches the handler regardless. /api/unload stands in for every
+# mutating route (/api/shutdown, /api/load, /api/autopwn): the middleware
+# is method-based, not route-specific, so proving it here proves the same
+# code path protects the others. /api/shutdown itself is untestable — it
+# calls os._exit and would kill the test runner.
+
+
+def test_foreign_origin_mutation_is_rejected_with_no_side_effect(app_client: TestClient, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert server._session.loader is not None
+
+    r = app_client.post("/api/unload", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+    assert server._session.loader is not None  # rejected before the handler ran
+
+
+def test_default_allowed_origin_mutation_still_works(app_client: TestClient, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload", headers={"Origin": "http://localhost:8888"})
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
+def test_mutation_with_no_origin_header_is_unaffected(app_client: TestClient, sample_path) -> None:
+    """No existing test sets an Origin header (curl/requests behave the
+    same way) — proving the middleware doesn't regress non-browser
+    clients."""
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload")
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
+def test_wildcard_cors_origins_opt_in_allows_a_foreign_origin_mutation(
+    app_client: TestClient, monkeypatch, sample_path
+) -> None:
+    monkeypatch.setenv("TRIAGE_CORS_ORIGINS", "*")
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 200
+    assert server._session.loader is None
 
 
 # ── Upload size limit ─────────────────────────────────────────────────

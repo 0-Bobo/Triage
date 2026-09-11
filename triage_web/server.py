@@ -6,12 +6,13 @@ import platform
 import re
 import sys
 import tempfile
-from dataclasses import dataclass, fields
+import threading
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from triage_web.analysis import (
     VULN_BOF,
@@ -60,6 +61,28 @@ def _cors_origins() -> list[str]:
 app = FastAPI(title="Triage Web", docs_url=None, redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_methods=["*"], allow_headers=["*"])
 
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def _reject_foreign_origin_mutations(request: Request, call_next):
+    """Block cross-origin form-POSTs to state-mutating routes.
+
+    CORS (above) only stops a cross-origin script from *reading* a
+    response — it doesn't stop a plain HTML `<form>` from *sending* a
+    POST in the first place, and a form submission needs no preflight.
+    Reuses the same `_cors_origins()` allowlist CORS enforces, so
+    widening one widens the other; a request with no `Origin` header
+    (curl, `requests`, non-browser clients) is left untouched.
+    """
+    origin = request.headers.get("origin")
+    if origin and request.method in _MUTATING_METHODS:
+        allowed = _cors_origins()
+        if "*" not in allowed and origin not in allowed:
+            return JSONResponse({"detail": "Cross-origin request rejected"}, status_code=403)
+    return await call_next(request)
+
+
 # Upload limits — TRIAGE_MAX_UPLOAD_BYTES matches the documented ~500MB
 # binary-size ceiling from PROJECT.md; reads happen in fixed-size chunks so
 # an oversized body is rejected mid-stream instead of fully buffered first.
@@ -84,14 +107,22 @@ class Session:
     filename: str | None = None
     _known_calls_cache: dict | None = None
     _overflow_sites_cache: list | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def reset(self, **values: object) -> None:
-        """Close the previous binary and replace the whole session."""
-        if self.loader is not None:
-            self.loader.close()
-        known = {f.name for f in fields(self)}
-        for name in known:
-            setattr(self, name, values.get(name))
+        """Close the previous binary and replace the whole session.
+
+        Guarded by a lock: sync FastAPI handlers run in a real OS
+        threadpool, and the frontend fires several concurrent fetches
+        right after every load, so a reader could otherwise observe a
+        torn mix of fields from two overlapping reset() calls.
+        """
+        with self._lock:
+            if self.loader is not None:
+                self.loader.close()
+            known = {f.name for f in fields(self) if f.name != "_lock"}
+            for name in known:
+                setattr(self, name, values.get(name))
 
     def get_known_calls(self) -> dict:
         """Address→name map for known calls (imports + local functions),
