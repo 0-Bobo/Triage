@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import platform
+import shlex
 
 import pytest
 from fastapi.testclient import TestClient
@@ -440,6 +441,49 @@ def test_uaf_emitted_exploit_is_parameterised():
     ptr_script = _emit_exploit("/bin/target", 0x402536, 0x28, 8765, True, {}, route="ptr")
     assert "route=ptr" in ptr_script and "needs a separate leak" in ptr_script
     compile(ptr_script, "<uaf>", "exec")
+
+
+_UAF_HOSTILE_PATH = "evil'\"; rm -rf ~; $(touch pwned).bin"
+
+
+def test_uaf_server_cmd_quotes_a_hostile_path_on_linux(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    monkeypatch.setattr(u.platform, "system", lambda: "Linux")
+    argv = u._server_cmd(_UAF_HOSTILE_PATH)
+    assert argv[:2] == ["/bin/sh", "-c"]
+    words = shlex.split(argv[-1])
+    assert _UAF_HOSTILE_PATH in words
+
+
+def test_uaf_server_cmd_quotes_a_hostile_path_on_wsl(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    monkeypatch.setattr(u.platform, "system", lambda: "Windows")
+    argv = u._server_cmd(_UAF_HOSTILE_PATH)
+    assert argv[:3] == ["wsl", "-e", "bash"]
+    words = shlex.split(argv[-1])
+    assert u.to_wsl(_UAF_HOSTILE_PATH) in words
+
+
+def test_uaf_kill_server_quotes_a_hostile_path(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    captured: dict[str, list[str]] = {}
+
+    def _capture_run(argv, **_kwargs):
+        captured["argv"] = argv
+
+    monkeypatch.setattr(u.subprocess, "run", _capture_run)
+
+    class _StubServer:
+        def terminate(self):
+            pass
+
+    u._kill_server(_UAF_HOSTILE_PATH, _StubServer())
+
+    words = shlex.split(captured["argv"][-1])
+    assert u.to_wsl(_UAF_HOSTILE_PATH) in words
 
 
 def test_uaf_classifies_how_the_callback_arg_is_used():

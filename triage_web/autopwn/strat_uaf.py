@@ -23,7 +23,7 @@ import textwrap
 import time
 from dataclasses import dataclass, field
 
-from triage_web.autopwn.runner import extract_flags, have_wsl, run_path, run_script, to_wsl
+from triage_web.autopwn.runner import _sh_quote, extract_flags, have_wsl, run_path, run_script, to_wsl
 from triage_web.loader import BinaryLoader
 
 try:
@@ -591,15 +591,21 @@ def _wait_for_port(port: int, *, deadline: float, log) -> bool:
 def _server_cmd(path) -> list[str]:
     wsl_bin = to_wsl(path)
     if _on_linux():
-        return ["/bin/sh", "-c", f"FLAG={_SELFTEST_FLAG} exec {path}"]
+        return ["/bin/sh", "-c", f"FLAG={_SELFTEST_FLAG} exec {_sh_quote(str(path))}"]
     folder = to_wsl(str(path).rsplit("\\", 1)[0]) if "\\" in str(path) else "."
-    return ["wsl", "-e", "bash", "-lc", f"cd {folder} 2>/dev/null; FLAG={_SELFTEST_FLAG} exec {wsl_bin}"]
+    return [
+        "wsl",
+        "-e",
+        "bash",
+        "-lc",
+        f"cd {_sh_quote(folder)} 2>/dev/null; FLAG={_SELFTEST_FLAG} exec {_sh_quote(wsl_bin)}",
+    ]
 
 
 def _kill_server(path, server) -> None:
     server.terminate()
     try:
-        subprocess.run(["wsl", "-e", "bash", "-lc", f"pkill -f {to_wsl(path)!r}"], timeout=5, check=False)
+        subprocess.run(["wsl", "-e", "bash", "-lc", f"pkill -f {_sh_quote(to_wsl(path))}"], timeout=5, check=False)
     except (OSError, subprocess.SubprocessError):  # pragma: no cover
         pass
 
