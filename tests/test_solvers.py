@@ -68,6 +68,18 @@ def test_srop_chain_does_not_hardcode_the_kernel_abi() -> None:
     assert 'kernel="amd64"' not in src
 
 
+def test_srop_chain_packs_the_syscall_gadget_at_the_target_bit_width() -> None:
+    """The pre-frame SYSCALL gadget address must be packed at the same width
+    as the rest of the frame via context.bits-aware pack(), not a hardcoded
+    p64() that would emit a wrong-width, corrupt payload for a 32-bit
+    target."""
+    src = solvers.generate_solver("srop_chain", "./target.bin", "x86", 32)
+    ast.parse(src)
+    compile(src, "<srop_chain:pack_width>", "exec")
+    assert "pack(SYSCALL)" in src
+    assert "p64(SYSCALL)" not in src
+
+
 # ── ret2libc: real pop_rdi / overflow_offset wiring ─────────────────────
 
 

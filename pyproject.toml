@@ -40,7 +40,11 @@ triage-web = "triage_web.server:main"
 triage-autopwn = "triage_web.autopwn.__main__:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6.9", "pre-commit>=3.8", "pip-audit>=2.7"]
+# httpx2 is starlette.testclient's actual dependency (used throughout the
+# test suite via the app_client fixture) - previously only present by
+# accident via flare-capa's optional IDA-plugin chain, which a fresh
+# environment isn't guaranteed to resolve the same way.
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6.9", "pre-commit>=3.8", "pip-audit>=2.7", "httpx2>=2.12"]
 
 [build-system]
 requires = ["hatchling"]

