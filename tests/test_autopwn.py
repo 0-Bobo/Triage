@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import platform
+import shlex
 
 import pytest
 from fastapi.testclient import TestClient
@@ -442,6 +443,49 @@ def test_uaf_emitted_exploit_is_parameterised():
     compile(ptr_script, "<uaf>", "exec")
 
 
+_UAF_HOSTILE_PATH = "evil'\"; rm -rf ~; $(touch pwned).bin"
+
+
+def test_uaf_server_cmd_quotes_a_hostile_path_on_linux(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    monkeypatch.setattr(u.platform, "system", lambda: "Linux")
+    argv = u._server_cmd(_UAF_HOSTILE_PATH)
+    assert argv[:2] == ["/bin/sh", "-c"]
+    words = shlex.split(argv[-1])
+    assert _UAF_HOSTILE_PATH in words
+
+
+def test_uaf_server_cmd_quotes_a_hostile_path_on_wsl(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    monkeypatch.setattr(u.platform, "system", lambda: "Windows")
+    argv = u._server_cmd(_UAF_HOSTILE_PATH)
+    assert argv[:3] == ["wsl", "-e", "bash"]
+    words = shlex.split(argv[-1])
+    assert u.to_wsl(_UAF_HOSTILE_PATH) in words
+
+
+def test_uaf_kill_server_quotes_a_hostile_path(monkeypatch):
+    from triage_web.autopwn import strat_uaf as u
+
+    captured: dict[str, list[str]] = {}
+
+    def _capture_run(argv, **_kwargs):
+        captured["argv"] = argv
+
+    monkeypatch.setattr(u.subprocess, "run", _capture_run)
+
+    class _StubServer:
+        def terminate(self):
+            pass
+
+    u._kill_server(_UAF_HOSTILE_PATH, _StubServer())
+
+    words = shlex.split(captured["argv"][-1])
+    assert u.to_wsl(_UAF_HOSTILE_PATH) in words
+
+
 def test_uaf_classifies_how_the_callback_arg_is_used():
     import capstone as cs
 
@@ -501,6 +545,16 @@ def test_fmt_server_argv_uses_native_shell_on_linux(monkeypatch):
 
     monkeypatch.setattr(strat_fmt.platform, "system", lambda: "Windows")
     assert strat_fmt._server_argv("svc-bin", 9999)[0] == "wsl"
+
+
+def test_fmt_server_argv_quotes_a_hostile_path_on_wsl(monkeypatch):
+    from triage_web.autopwn import strat_fmt
+
+    monkeypatch.setattr(strat_fmt.platform, "system", lambda: "Windows")
+    argv = strat_fmt._server_argv(_UAF_HOSTILE_PATH, 9999)
+    assert argv[:3] == ["wsl", "-e", "bash"]
+    words = shlex.split(argv[-1])
+    assert strat_fmt.to_wsl(_UAF_HOSTILE_PATH) in words
 
 
 def test_fmt_probe_network_survives_a_missing_runtime(monkeypatch):
