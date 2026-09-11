@@ -52,6 +52,12 @@ def test_index_serves_the_spa_uncached() -> None:
     assert "<!DOCTYPE html>" in resp.text
 
 
+def test_index_carries_csp_and_nosniff_headers() -> None:
+    resp = TestClient(server.app).get("/")
+    assert resp.headers["content-security-policy"] == "default-src 'self'"
+    assert resp.headers["x-content-type-options"] == "nosniff"
+
+
 def test_index_text_muted_meets_contrast_and_respects_reduced_motion() -> None:
     resp = TestClient(server.app).get("/")
     assert "--text-muted: #8f8f8f;" in resp.text
