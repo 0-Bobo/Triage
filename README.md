@@ -38,7 +38,7 @@ pip install -r requirements-web.txt
 python main.py path/to/target
 ```
 
-Then open <http://127.0.0.1:8000>. The heavy backends (angr, unicorn,
+Then open <http://127.0.0.1:8888>. The heavy backends (angr, unicorn,
 flare-capa, z3) are optional; each module checks for its dependency at import
 and disables that feature if it is missing.
 

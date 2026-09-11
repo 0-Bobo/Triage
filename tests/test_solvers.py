@@ -42,6 +42,32 @@ def test_generate_solver_rejects_unknown_type() -> None:
         solvers.generate_solver("does_not_exist", "./x.bin", "x86", 64)
 
 
+# ── srop_chain: bit-appropriate register names ──────────────────────────
+
+_SROP_REGS_64 = ("frame.rax", "frame.rdi", "frame.rsi", "frame.rdx", "frame.rip")
+_SROP_REGS_32 = ("frame.eax", "frame.ebx", "frame.ecx", "frame.edx", "frame.eip")
+
+
+@pytest.mark.parametrize("bits", [32, 64])
+def test_srop_chain_emits_bit_appropriate_register_names(bits: int) -> None:
+    src = solvers.generate_solver("srop_chain", "./target.bin", "x86_64" if bits == 64 else "x86", bits)
+    ast.parse(src)
+    compile(src, f"<srop_chain:{bits}>", "exec")
+
+    own_regs, other_regs = (_SROP_REGS_64, _SROP_REGS_32) if bits == 64 else (_SROP_REGS_32, _SROP_REGS_64)
+    for reg in own_regs:
+        assert reg in src
+    for reg in other_regs:
+        assert reg not in src
+
+
+def test_srop_chain_does_not_hardcode_the_kernel_abi() -> None:
+    src = solvers.generate_solver("srop_chain", "./target.bin", "x86", 32)
+    ast.parse(src)
+    compile(src, "<srop_chain:kernel>", "exec")
+    assert 'kernel="amd64"' not in src
+
+
 # ── ret2libc: real pop_rdi / overflow_offset wiring ─────────────────────
 
 
