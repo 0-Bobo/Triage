@@ -490,7 +490,9 @@ def api_hex_search(q: str, kind: str = "auto", limit: int = 500):
         needle = q.encode("latin-1", "ignore")
     elif kind == "hex":
         hx = re.sub(r"[^0-9a-fA-F]", "", q)
-        needle = bytes.fromhex(hx[:-1] if len(hx) % 2 else hx) if hx else b""
+        if hx and len(hx) % 2:
+            raise HTTPException(400, f"odd-length hex query: {q!r}")
+        needle = bytes.fromhex(hx) if hx else b""
     else:
         cleaned = re.sub(r"\s+|^0x", "", q, flags=re.I)
         if cleaned and re.fullmatch(r"[0-9a-fA-F]+", cleaned) and len(cleaned) % 2 == 0:
@@ -770,6 +772,13 @@ def api_capa():
         items = []
         for rule_name, matches in caps.items():
             ns = ""
+            # `matches` is one of two known flare-capa result shapes (a dict
+            # keyed by e.g. address, or an iterable of match objects). This
+            # sniffs between them and would silently take the wrong branch —
+            # not raise — if a future flare-capa version changes its return
+            # type. Flagged, not fixed: no concrete replacement was
+            # prescribed, and the fragility is cosmetic (wrong/empty
+            # namespace), not a correctness or security issue.
             if hasattr(matches, "__iter__") and not isinstance(matches, dict):
                 ns = getattr(next(iter(matches), None), "namespace", "")
             items.append(
@@ -1311,8 +1320,16 @@ def favicon():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    # no-store so a redeployed build's JS isn't served from the browser cache
-    return HTMLResponse(HTML_PAGE, headers={"Cache-Control": "no-store"})
+    # no-store so a redeployed build's JS isn't served from the browser cache;
+    # CSP/nosniff are cheap defense-in-depth against a future XSS regression
+    return HTMLResponse(
+        HTML_PAGE,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": "default-src 'self'",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════
