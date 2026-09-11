@@ -547,6 +547,16 @@ def test_fmt_server_argv_uses_native_shell_on_linux(monkeypatch):
     assert strat_fmt._server_argv("svc-bin", 9999)[0] == "wsl"
 
 
+def test_fmt_server_argv_quotes_a_hostile_path_on_wsl(monkeypatch):
+    from triage_web.autopwn import strat_fmt
+
+    monkeypatch.setattr(strat_fmt.platform, "system", lambda: "Windows")
+    argv = strat_fmt._server_argv(_UAF_HOSTILE_PATH, 9999)
+    assert argv[:3] == ["wsl", "-e", "bash"]
+    words = shlex.split(argv[-1])
+    assert strat_fmt.to_wsl(_UAF_HOSTILE_PATH) in words
+
+
 def test_fmt_probe_network_survives_a_missing_runtime(monkeypatch):
     from triage_web.autopwn import strat_fmt
 

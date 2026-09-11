@@ -135,7 +135,7 @@ def _server_argv(path: str, port: int) -> list[str]:
     if platform.system() == "Linux":
         p = _sh_quote(str(path))
         return ["/bin/bash", "-lc", f"chmod +x {p} 2>/dev/null; exec {p} {port}"]
-    wp = to_wsl(path)
+    wp = _sh_quote(to_wsl(path))
     return ["wsl", "-e", "bash", "-lc", f"chmod +x {wp}; exec {wp} {port}"]
 
 
