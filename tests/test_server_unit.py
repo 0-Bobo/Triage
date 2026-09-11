@@ -245,6 +245,60 @@ def test_cors_origins_honors_the_env_override(monkeypatch) -> None:
     assert server._cors_origins() == ["https://a.example", "https://b.example"]
 
 
+# ── CSRF / Origin protection ─────────────────────────────────────────
+#
+# CORS above blocks a cross-origin script from *reading* a response, not
+# from *sending* a request — a plain HTML <form> POST needs no preflight
+# and reaches the handler regardless. /api/unload stands in for every
+# mutating route (/api/shutdown, /api/load, /api/autopwn): the middleware
+# is method-based, not route-specific, so proving it here proves the same
+# code path protects the others. /api/shutdown itself is untestable — it
+# calls os._exit and would kill the test runner.
+
+
+def test_foreign_origin_mutation_is_rejected_with_no_side_effect(app_client: TestClient, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert server._session.loader is not None
+
+    r = app_client.post("/api/unload", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 403
+    assert server._session.loader is not None  # rejected before the handler ran
+
+
+def test_default_allowed_origin_mutation_still_works(app_client: TestClient, sample_path) -> None:
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload", headers={"Origin": "http://localhost:8888"})
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
+def test_mutation_with_no_origin_header_is_unaffected(app_client: TestClient, sample_path) -> None:
+    """No existing test sets an Origin header (curl/requests behave the
+    same way) — proving the middleware doesn't regress non-browser
+    clients."""
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload")
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
+def test_wildcard_cors_origins_opt_in_allows_a_foreign_origin_mutation(
+    app_client: TestClient, monkeypatch, sample_path
+) -> None:
+    monkeypatch.setenv("TRIAGE_CORS_ORIGINS", "*")
+    with open(sample_path, "rb") as fh:
+        app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+
+    r = app_client.post("/api/unload", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 200
+    assert server._session.loader is None
+
+
 # ── Upload size limit ─────────────────────────────────────────────────
 
 
