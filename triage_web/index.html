@@ -1021,7 +1021,7 @@ async function loadDisasm() {
       '<tr onclick="goToHex(\''+i.address+'\')" style="cursor:pointer">' +
         '<td class="addr">'+i.address+'</td>' +
         '<td style="color:var(--text-muted);font-size:10px">'+i.bytes+'</td>' +
-        '<td class="mnem" style="color:'+i.color+'">'+i.mnemonic+'</td>' +
+        '<td class="mnem" style="color:'+i.color+'">'+esc(i.mnemonic)+'</td>' +
         '<td>'+esc(i.op_str)+'</td>' +
       '</tr>'
     ).join('');

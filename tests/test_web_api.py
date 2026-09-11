@@ -112,6 +112,12 @@ def test_index_escapes_the_imports_library_cell() -> None:
     assert "'</td><td style=\"color:var(--text-dim)\">'+(i.library||'')+'</td>" not in resp.text
 
 
+def test_index_escapes_the_disasm_mnemonic_cell() -> None:
+    resp = TestClient(server.app).get("/")
+    assert "'<td class=\"mnem\" style=\"color:'+i.color+'\">'+esc(i.mnemonic)+'</td>" in resp.text
+    assert "'<td class=\"mnem\" style=\"color:'+i.color+'\">'+i.mnemonic+'</td>" not in resp.text
+
+
 def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
     resp = TestClient(server.app).get("/")
     assert "function escAttr(s) {" in resp.text
