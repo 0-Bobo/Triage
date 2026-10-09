@@ -1549,7 +1549,7 @@ class TestDisassemblerCore(unittest.TestCase):
 class TestGetCallArgs(unittest.TestCase):
     def setUp(self):
         self.d = Disassembler()
-        self.rid = lambda op, hint="": op  # identity resolve_op
+        self.rid = lambda op: op  # identity resolve_op
 
     def test_xor_zeroed_arg_register(self):
         insns = [
