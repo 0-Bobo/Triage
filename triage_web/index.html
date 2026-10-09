@@ -42,10 +42,6 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; line-height:1.6; -webkit-font-smoothing:antialiased; }
-/* Faint fixed glow behind the whole app so the titlebar/tab-bar vibrancy
-   (backdrop-filter below) has something with texture to blur — a flat
-   solid background blurs into itself and the effect disappears. */
-body { background-image:radial-gradient(circle at 18% -10%, rgba(244,244,244,.08), transparent 45%), radial-gradient(circle at 85% 0%, rgba(244,244,244,.05), transparent 40%); background-attachment:fixed; }
 ::selection { background:rgba(244,244,244,.32); color:#0b0b0b; }
 ::-webkit-scrollbar { width:10px; height:10px; }
 ::-webkit-scrollbar-track { background:var(--bg2); }
@@ -54,28 +50,23 @@ body { background-image:radial-gradient(circle at 18% -10%, rgba(244,244,244,.08
 :focus-visible { outline:1px solid var(--accent); outline-offset:1px; }
 
 /* ── Layout ─────────────────────────────────────────────── */
-#app { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+#app { display:flex; flex-direction:row; height:100vh; overflow:hidden; }
 
-/* ── Sidebar — styled as a Terminal.app/iTerm profile-tab strip,
-   docked under the titlebar instead of a left icon rail ────── */
-.sidebar { width:100%; background:var(--bg2); border-right:none; border-bottom:1px solid var(--border); display:flex; flex-direction:row; align-items:stretch; padding:0 8px; gap:2px; flex-shrink:0; z-index:10; overflow-x:auto; }
-/* macOS "vibrancy": the window-chrome strips (tab bar, titlebar) get a
-   translucent blur instead of a flat fill — never a drop shadow, which
-   would break the sharp/flat direction above. Falls back to the solid
-   background on anything that can't do backdrop-filter. */
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .sidebar { background:rgba(0,0,0,.72); backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%); }
-  .titlebar { background:rgba(14,14,14,.72); backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%); }
-}
-.sidebar .logo-box { height:auto; width:auto; display:flex; align-items:center; justify-content:center; color:var(--text-dim); margin:0 8px 0 0; padding-right:8px; border-bottom:none; border-right:1px solid var(--border); flex-shrink:0; }
+/* ── Sidebar — vertical icon rail docked to the left edge, full height.
+   No backdrop-filter here: a blurred region next to an always-blinking
+   cursor (cursor-blink, see .tcursor) forced a continuous repaint and
+   was the main source of the reported jank — flat backgrounds only. */
+.sidebar { width:var(--sidebar-w); background:var(--bg2); border-right:1px solid var(--border); border-bottom:none; display:flex; flex-direction:column; align-items:stretch; padding:8px 0; gap:2px; flex-shrink:0; z-index:10; overflow-x:hidden; overflow-y:auto; }
+.sidebar .logo-box { height:auto; width:auto; display:flex; align-items:center; justify-content:center; color:var(--text-dim); margin:0 0 8px 0; padding-bottom:8px; border-right:none; border-bottom:1px solid var(--border); flex-shrink:0; }
 .sidebar .logo-box svg { width:16px; height:16px; }
-.sidebar button { position:relative; height:34px; margin-top:6px; border:1px solid transparent; border-bottom:none; border-radius:var(--radius) var(--radius) 0 0; background:transparent; color:var(--text-muted); cursor:pointer; font-size:10px; font-weight:600; letter-spacing:.2px; text-transform:none; padding:0 12px; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px; flex-shrink:0; transition:color .1s, background .1s, border-color .1s; }
+.sidebar button { position:relative; width:100%; height:40px; border:1px solid transparent; border-radius:var(--radius); background:transparent; color:var(--text-muted); cursor:pointer; font-size:10px; font-weight:600; letter-spacing:.2px; text-transform:none; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:color .1s, background .1s, border-color .1s; }
 .sidebar button .ico { font-size:12px; line-height:1; opacity:.85; }
+.sidebar button .lbl { display:none; }
 .sidebar button:hover { color:var(--text); background:var(--surface); }
 .sidebar button.active { color:var(--text); background:var(--mantle); border-color:var(--border); }
-.sidebar button.active::before { content:''; position:absolute; top:-1px; left:0; right:0; height:2px; background:var(--accent); }
+.sidebar button.active::before { content:''; position:absolute; top:4px; bottom:4px; left:-1px; width:2px; background:var(--accent); }
 .sidebar .spacer { flex:1; }
-.sidebar .sep { width:1px; align-self:center; height:18px; background:var(--border); margin:0 4px; flex-shrink:0; }
+.sidebar .sep { width:28px; align-self:center; height:1px; background:var(--border); margin:4px 0; flex-shrink:0; }
 
 /* ── Title Bar (status readout) ─────────────────────────── */
 .titlebar { display:flex; align-items:center; gap:10px; height:var(--titlebar-h); padding:0 14px; background:var(--mantle); border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -225,6 +216,15 @@ input::placeholder { color:var(--text-muted); }
 .empty-state::before { top:14px; left:14px; border-top:1px solid var(--border-bright); border-left:1px solid var(--border-bright); }
 .empty-state::after { bottom:14px; right:14px; border-bottom:1px solid var(--border-bright); border-right:1px solid var(--border-bright); }
 
+/* ── Empty-state hero card (first-run "no binary loaded") ──── */
+.empty-hero-card { max-width:460px; display:flex; flex-direction:column; align-items:center; gap:14px; padding:40px 48px; border:1px solid var(--border-bright); border-radius:var(--radius); background:var(--mantle); }
+.empty-hero-title { font-size:26px; font-weight:700; letter-spacing:-.5px; font-family:var(--font-display); color:var(--text); }
+.empty-hero-tagline { font-size:12.5px; color:var(--text-dim); line-height:1.65; text-align:center; }
+.empty-hero-actions { display:flex; gap:10px; margin-top:4px; }
+.empty-hero-actions .btn { padding:11px 22px; font-size:12px; }
+.empty-hero-caps { width:460px; max-width:100%; margin-top:22px; }
+#info-empty .empty-hero-caps .ico { font-size:11px; opacity:1; }
+
 /* ── Loading spinner ────────────────────────────────────── */
 .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border-bright); border-top-color:var(--accent); animation:spin .7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -291,7 +291,6 @@ input::placeholder { color:var(--text-muted); }
 
 /* ── Responsive tweaks ──────────────────────────────────── */
 @media (max-width:768px) {
-  .sidebar button .lbl { display:none; }
   .stat-grid { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); }
 }
 
@@ -311,22 +310,22 @@ input::placeholder { color:var(--text-muted); }
         <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>
       </svg>
     </div>
-    <button data-panel="auto" id="nav-auto" aria-label="Auto"><span class="ico">&#9889;&#xFE0E;</span><span class="lbl">Auto</span></button>
+    <button data-panel="auto" id="nav-auto" aria-label="Auto" title="Auto"><span class="ico">&#9889;&#xFE0E;</span><span class="lbl">Auto</span></button>
     <div class="sep"></div>
-    <button class="active" data-panel="info" aria-label="Info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
-    <button data-panel="functions" aria-label="Functions"><span class="ico">&#402;</span><span class="lbl">Funcs</span></button>
-    <button data-panel="code" aria-label="Decompiled Code"><span class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
-    <button data-panel="disasm" aria-label="Disassembly"><span class="ico">&#9776;</span><span class="lbl">Asm</span></button>
-    <button data-panel="hex" aria-label="Hex Viewer"><span class="ico">#</span><span class="lbl">Hex</span></button>
-    <button data-panel="imports" aria-label="Data"><span class="ico">&larr;</span><span class="lbl">Data</span></button>
+    <button class="active" data-panel="info" aria-label="Info" title="Info"><span class="ico">&#9881;</span><span class="lbl">Info</span></button>
+    <button data-panel="functions" aria-label="Functions" title="Functions"><span class="ico">&#402;</span><span class="lbl">Funcs</span></button>
+    <button data-panel="code" aria-label="Decompiled Code" title="Decompiled Code"><span class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
+    <button data-panel="disasm" aria-label="Disassembly" title="Disassembly"><span class="ico">&#9776;</span><span class="lbl">Asm</span></button>
+    <button data-panel="hex" aria-label="Hex Viewer" title="Hex Viewer"><span class="ico">#</span><span class="lbl">Hex</span></button>
+    <button data-panel="imports" aria-label="Data" title="Data"><span class="ico">&larr;</span><span class="lbl">Data</span></button>
     <div class="sep"></div>
-    <button data-panel="exploit" aria-label="Exploit"><span class="ico">!</span><span class="lbl">Exploit</span></button>
-    <button data-panel="capa" aria-label="CAPA"><span class="ico">C</span><span class="lbl">CAPA</span></button>
-    <button data-panel="xrefs" aria-label="Cross References"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
+    <button data-panel="exploit" aria-label="Exploit" title="Exploit"><span class="ico">!</span><span class="lbl">Exploit</span></button>
+    <button data-panel="capa" aria-label="CAPA" title="CAPA"><span class="ico">C</span><span class="lbl">CAPA</span></button>
+    <button data-panel="xrefs" aria-label="Cross References" title="Cross References"><span class="ico">&#8596;</span><span class="lbl">XRef</span></button>
     <div class="spacer"></div>
-    <button onclick="quitServer()" aria-label="Quit"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
-    <button data-panel="status" aria-label="Status"><span class="ico">&#9707;</span><span class="lbl">Status</span></button>
-    <button data-panel="about" aria-label="About"><span class="ico">?</span><span class="lbl">About</span></button>
+    <button onclick="quitServer()" aria-label="Quit" title="Quit"><span class="ico">&#10005;</span><span class="lbl">Quit</span></button>
+    <button data-panel="status" aria-label="Status" title="Status"><span class="ico">&#9707;</span><span class="lbl">Status</span></button>
+    <button data-panel="about" aria-label="About" title="About"><span class="ico">?</span><span class="lbl">About</span></button>
   </div>
 
   <!-- Content area -->
@@ -358,12 +357,28 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Info ===== -->
       <div class="panel active" id="panel-info">
         <div id="info-empty" class="empty-state">
-          <div class="ico">&#9881;</div>
-          <div class="big">Load a binary to begin</div>
-          <div class="sub">Upload a file or enter a path on the server</div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Upload File</button>
-            <button class="btn" onclick="showLoadDialog()">Enter Path</button>
+          <div class="empty-hero-card">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="square" aria-hidden="true">
+              <path d="M4 9V6a2 2 0 0 1 2-2h3"/><path d="M15 4h3a2 2 0 0 1 2 2v3"/>
+              <path d="M20 15v3a2 2 0 0 1-2 2h-3"/><path d="M9 20H6a2 2 0 0 1-2-2v-3"/>
+              <circle cx="12" cy="12" r="1.6" fill="var(--accent)" stroke="none"/>
+            </svg>
+            <div class="empty-hero-title">Triage</div>
+            <div class="empty-hero-tagline">A local binary-analysis workbench for CTF reverse-engineering and pwn &mdash; disassembly, decompiler, cross-references, ROP search and autopwn, all in the browser.</div>
+            <div class="empty-hero-actions">
+              <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Upload File</button>
+              <button class="btn" onclick="showLoadDialog()">Enter Path</button>
+            </div>
+          </div>
+          <div class="about-caps empty-hero-caps">
+            <div><span class="ico">{&#160;}</span>Decompiler</div>
+            <div><span class="ico">&#9776;</span>Disassembly</div>
+            <div><span class="ico">#</span>Hex viewer</div>
+            <div><span class="ico">&#8596;</span>Cross-refs</div>
+            <div><span class="ico">!</span>ROP search</div>
+            <div><span class="ico">C</span>CAPA</div>
+            <div><span class="ico">&#9889;&#xFE0E;</span>Autopwn</div>
+            <div><span class="ico">&larr;</span>Imports / strings</div>
           </div>
         </div>
         <div id="info-content" style="display:none;overflow:auto;flex:1;padding:14px">
