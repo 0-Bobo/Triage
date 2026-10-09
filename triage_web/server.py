@@ -67,6 +67,15 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
+    "img-src 'self' data:; "
+    "object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
+
 
 @app.middleware("http")
 async def _reject_foreign_origin_mutations(request: Request, call_next):
@@ -1356,12 +1365,15 @@ def favicon():
 @app.get("/", response_class=HTMLResponse)
 def index():
     # no-store so a redeployed build's JS isn't served from the browser cache;
-    # CSP/nosniff are cheap defense-in-depth against a future XSS regression
+    # CSP/nosniff are cheap defense-in-depth against a future XSS regression.
+    # The UI is one file with inline <script>/<style>, onclick handlers and
+    # data: fonts/icons, so those are allowed; other origins, frames, plugins
+    # and base-uri stay locked down (see CSP_POLICY).
     return HTMLResponse(
         HTML_PAGE,
         headers={
             "Cache-Control": "no-store",
-            "Content-Security-Policy": "default-src 'self'",
+            "Content-Security-Policy": CSP_POLICY,
             "X-Content-Type-Options": "nosniff",
         },
     )
