@@ -3,15 +3,15 @@
    inlined base64 so the stylesheet stays readable; still same-origin,
    no external font-CDN dependency. */
 @font-face { font-family:'Geist Sans'; font-weight:400; font-style:normal; font-display:swap;
-  src:url(/static/fonts/Geist-Regular.woff2) format('woff2'); }
+  src:url(static/fonts/Geist-Regular.woff2) format('woff2'); }
 @font-face { font-family:'Geist Sans'; font-weight:500; font-style:normal; font-display:swap;
-  src:url(/static/fonts/Geist-Medium.woff2) format('woff2'); }
+  src:url(static/fonts/Geist-Medium.woff2) format('woff2'); }
 @font-face { font-family:'Geist Sans'; font-weight:600; font-style:normal; font-display:swap;
-  src:url(/static/fonts/Geist-SemiBold.woff2) format('woff2'); }
+  src:url(static/fonts/Geist-SemiBold.woff2) format('woff2'); }
 @font-face { font-family:'Geist Mono'; font-weight:400; font-style:normal; font-display:swap;
-  src:url(/static/fonts/GeistMono-Regular.woff2) format('woff2'); }
+  src:url(static/fonts/GeistMono-Regular.woff2) format('woff2'); }
 @font-face { font-family:'Geist Mono'; font-weight:500; font-style:normal; font-display:swap;
-  src:url(/static/fonts/GeistMono-Medium.woff2) format('woff2'); }
+  src:url(static/fonts/GeistMono-Medium.woff2) format('woff2'); }
 
 /* ============================================================
    Direction: Prime Intellect / Dreadnode inspired — near-black

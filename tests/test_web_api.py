@@ -78,7 +78,9 @@ def test_style_css_is_served_uncached_with_the_right_media_type() -> None:
 
 def test_index_links_the_external_stylesheet_instead_of_inlining_it() -> None:
     resp = TestClient(server.app).get("/")
-    assert '<link rel="stylesheet" href="/style.css">' in resp.text
+    # Relative, not absolute: index.html must still render correctly when
+    # opened directly as a local file (file://), not only when served.
+    assert '<link rel="stylesheet" href="style.css">' in resp.text
     assert "<style>" not in resp.text
 
 
@@ -96,7 +98,7 @@ def test_static_fonts_are_served_as_real_files_not_inlined_base64() -> None:
         assert resp.content[:4] == b"wOF2"  # woff2 magic number
     css = client.get("/style.css").text
     assert "data:font" not in css
-    assert "/static/fonts/Geist-Regular.woff2" in css
+    assert "static/fonts/Geist-Regular.woff2" in css
 
 
 def test_index_has_accessible_labels_on_icon_only_controls() -> None:
