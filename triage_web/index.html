@@ -55,12 +55,21 @@ html,body { height:100%; background:var(--bg); color:var(--text); font-family:va
 /* ── Sidebar — styled as a Terminal.app/iTerm profile-tab strip,
    docked under the titlebar instead of a left icon rail ────── */
 .sidebar { width:100%; background:var(--bg2); border-right:none; border-bottom:1px solid var(--border); display:flex; flex-direction:row; align-items:stretch; padding:0 8px; gap:2px; flex-shrink:0; z-index:10; overflow-x:auto; }
+/* macOS "vibrancy": the window-chrome strips (tab bar, titlebar) get a
+   translucent blur instead of a flat fill — never a drop shadow, which
+   would break the sharp/flat direction above. Falls back to the solid
+   background on anything that can't do backdrop-filter. */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .sidebar { background:rgba(0,0,0,.72); backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%); }
+  .titlebar { background:rgba(14,14,14,.72); backdrop-filter:blur(18px) saturate(140%); -webkit-backdrop-filter:blur(18px) saturate(140%); }
+}
 .sidebar .logo-box { height:auto; width:auto; display:flex; align-items:center; justify-content:center; color:var(--text-dim); margin:0 8px 0 0; padding-right:8px; border-bottom:none; border-right:1px solid var(--border); flex-shrink:0; }
 .sidebar .logo-box svg { width:16px; height:16px; }
 .sidebar button { position:relative; height:34px; margin-top:6px; border:1px solid transparent; border-bottom:none; border-radius:var(--radius) var(--radius) 0 0; background:transparent; color:var(--text-muted); cursor:pointer; font-size:10px; font-weight:600; letter-spacing:.2px; text-transform:none; padding:0 12px; display:flex; flex-direction:row; align-items:center; justify-content:center; gap:6px; flex-shrink:0; transition:color .1s, background .1s, border-color .1s; }
 .sidebar button .ico { font-size:12px; line-height:1; opacity:.85; }
 .sidebar button:hover { color:var(--text); background:var(--surface); }
 .sidebar button.active { color:var(--text); background:var(--mantle); border-color:var(--border); }
+.sidebar button.active::before { content:''; position:absolute; top:-1px; left:0; right:0; height:2px; background:var(--accent); }
 .sidebar .spacer { flex:1; }
 .sidebar .sep { width:1px; align-self:center; height:18px; background:var(--border); margin:0 4px; flex-shrink:0; }
 
