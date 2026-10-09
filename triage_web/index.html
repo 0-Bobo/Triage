@@ -1089,7 +1089,7 @@ async function showCodeFunction(vaddrHex) {
   disasmEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Loading\u2026</div>';
 
   document.querySelectorAll('.code-func-item').forEach(el => {
-    el.style.background = el.dataset.addr === vaddrHex ? 'rgba(96,165,250,.12)' : '';
+    el.style.background = el.dataset.addr === vaddrHex ? 'rgba(106,160,200,.12)' : '';
   });
 
   try {
@@ -1129,7 +1129,7 @@ async function showCodeFunction(vaddrHex) {
 
       if (stackVars.length) {
         varsEl.innerHTML = stackVars.map(v =>
-          '<span title="'+esc(v.name)+' offset='+v.offset+'" style="background:rgba(189,147,249,.1);color:rgba(189,147,249,.9);padding:1px 5px;border-radius:3px">' +
+          '<span title="'+esc(v.name)+' offset='+v.offset+'" style="background:var(--violet-soft);color:var(--violet);padding:1px 5px">' +
             esc(v.suggested !== v.name ? v.suggested+' ('+v.name+')' : v.name) +
           '</span>'
         ).join('');
@@ -1137,7 +1137,7 @@ async function showCodeFunction(vaddrHex) {
         varsEl.innerHTML = '<span style="color:var(--text-muted)">none</span>';
       }
 
-      const blockColors = ['rgba(96,165,250,.04)', 'rgba(189,147,249,.04)', 'rgba(106,135,89,.04)', 'rgba(214,157,133,.04)'];
+      const blockColors = ['rgba(106,160,200,.04)', 'rgba(154,143,192,.04)', 'rgba(87,183,106,.04)', 'rgba(232,152,58,.04)'];
       const blockMap = {};
       blocks.forEach((b, i) => {
         if (b.length >= 2) {
@@ -1162,7 +1162,7 @@ async function showCodeFunction(vaddrHex) {
             v.accesses && v.accesses.some(a => a.at === addr)
           );
           const varNote = usedVars.length
-            ? usedVars.map(v => '<span style="color:rgba(189,147,249,.9)">'+esc(v.suggested !== v.name ? v.suggested : v.name)+'</span>').join(', ')
+            ? usedVars.map(v => '<span style="color:var(--violet)">'+esc(v.suggested !== v.name ? v.suggested : v.name)+'</span>').join(', ')
             : '';
           return '<tr style="background:'+bkg+'">' +
             '<td style="padding:1px 8px;color:var(--blue)">'+addrToHex(addr)+'</td>' +
@@ -1172,7 +1172,7 @@ async function showCodeFunction(vaddrHex) {
             '</td>' +
             '<td style="padding:1px 8px;font-size:9px">' +
               (vulnCall ? '<span style="color:var(--red)">\u25B6 '+esc(vulnCall.name)+'</span>' : '') +
-              (varNote ? '<span style="color:rgba(189,147,249,.9);margin-left:4px">\u2190 '+varNote+'</span>' : '') +
+              (varNote ? '<span style="color:var(--violet);margin-left:4px">\u2190 '+varNote+'</span>' : '') +
             '</td>' +
           '</tr>';
         }).join('') +
@@ -1282,9 +1282,9 @@ async function loadExploitPaths(btn) {
       html += '<div style="font-size:10px;font-family:var(--font-mono);line-height:1.7;margin-bottom:10px;padding:6px 10px;background:var(--bg2);border:1px solid var(--border)">'+facts.join('<br>')+'</div>';
     }
     if ((summary.win_functions||[]).length) {
-      html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">🏆 Win / backdoor functions</div>';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px 0">⚑ Win / backdoor functions</div>';
       for (const w of summary.win_functions) {
-        html += '<div style="padding:5px 10px;margin-bottom:4px;background:rgba(63,185,80,.06);border-left:3px solid var(--green);border-radius:4px;font-size:11px">' +
+        html += '<div style="padding:5px 10px;margin-bottom:4px;background:rgba(87,183,106,.06);border-left:3px solid var(--green);font-size:11px">' +
           '<a href="#" data-name="'+escAttr(w.name)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--green);font-weight:600;text-decoration:none">'+esc(w.name)+'</a>' +
           ' <span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(w.address)+'</span>' +
           ' <span style="color:var(--text-muted)">— '+esc(w.reason)+'</span></div>';
@@ -1293,7 +1293,7 @@ async function loadExploitPaths(btn) {
     if (sites.length) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px 0">↳ Stack overflow sites</div>';
       for (const s of sites) {
-        html += '<div style="padding:6px 10px;margin-bottom:4px;background:rgba(255,255,255,.02);border-radius:4px;font-size:11px">' +
+        html += '<div style="padding:6px 10px;margin-bottom:4px;background:rgba(255,255,255,.02);font-size:11px">' +
           '<a href="#" data-name="'+escAttr(s.function)+'" onclick="showCodeWithSearch(this.dataset.name);return false" style="font-family:var(--font-mono);color:var(--cyan);font-weight:600;text-decoration:none">'+esc(s.function)+'</a>' +
           ' <span style="color:var(--blue);font-family:var(--font-mono);font-size:10px">'+esc(s.address)+'</span>' +
           ' <span style="color:var(--red)">'+esc((s.unsafe_calls||[]).join(', '))+'</span><br>' +
@@ -1314,7 +1314,7 @@ async function loadExploitPaths(btn) {
             addrHtml +
             '<span class="badge badge-'+f.severity.toLowerCase()+'">'+esc(f.severity)+'</span>' +
           '</div>' +
-          '<div style="font-size:10px;color:var(--blue);font-family:var(--font-mono);background:rgba(96,165,250,.06);padding:2px 6px;border-radius:4px;display:inline-block;margin-bottom:4px">'+esc(f.code)+'</div>' +
+          '<div style="font-size:10px;color:var(--blue);font-family:var(--font-mono);background:rgba(106,160,200,.06);padding:2px 6px;display:inline-block;margin-bottom:4px">'+esc(f.code)+'</div>' +
           '<div style="font-size:11px;color:var(--text);margin:4px 0">'+esc(f.issue)+'</div>' +
           '<div style="font-size:11px;color:var(--green);line-height:1.5">'+esc(f.recipe)+'</div>' +
           (f.fix ? '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Fix: '+esc(f.fix)+'</div>' : '') +
@@ -1331,7 +1331,7 @@ async function loadExploitPaths(btn) {
         const solverType = PATH_SOLVER_MAP[p.name];
         let inner = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
           '<span style="font-weight:600;font-size:11px;color:var(--cyan)">'+esc(p.name)+'</span>' +
-          (p.confidence ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:'+col+';border:1px solid '+col+';border-radius:3px;padding:0 4px">'+esc(p.confidence)+'</span>' : '') +
+          (p.confidence ? '<span style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:'+col+';border:1px solid '+col+';padding:0 4px">'+esc(p.confidence)+'</span>' : '') +
           (solverType ? '<button class="btn btn-primary" style="margin-left:auto;font-size:9px;padding:2px 8px" onclick="jumpToSolver(\''+solverType+'\')">Exploit &rarr;</button>' : '') +
           '</div>';
         if (p.why) inner += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">'+esc(p.why)+'</div>';
@@ -1340,9 +1340,9 @@ async function loadExploitPaths(btn) {
           const id = 'sk_'+Math.random().toString(36).slice(2,8);
           inner += '<div style="position:relative;margin-top:4px">' +
             '<button class="skel-copy" onclick="copyText(document.getElementById(\''+id+'\').textContent, this)">Copy</button>' +
-            '<pre id="'+id+'" style="margin:0;padding:8px 60px 8px 8px;background:#0a0c10;border:1px solid var(--border);border-radius:4px;font-size:10px;line-height:1.45;color:#9db4c9;overflow-x:auto;white-space:pre;user-select:text">'+esc(p.skeleton)+'</pre></div>';
+            '<pre id="'+id+'" style="margin:0;padding:8px 60px 8px 8px;background:var(--bg2);border:1px solid var(--border);font-size:10px;line-height:1.45;color:var(--text-dim);overflow-x:auto;white-space:pre;user-select:text">'+esc(p.skeleton)+'</pre></div>';
         }
-        html += '<div style="padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,.02);border-radius:4px;border-left:3px solid '+col+'">'+inner+'</div>';
+        html += '<div style="padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,.02);border-left:3px solid '+col+'">'+inner+'</div>';
       }
     }
 
@@ -1388,7 +1388,7 @@ async function searchROP() {
     const data = await r.json();
     document.getElementById('rop-tbody').innerHTML = data.gadgets.map(g =>
       '<tr><td class="addr">'+g.addr+'</td><td style="font-size:11px">'+esc(g.text)+'</td>'+
-      '<td>'+g.classes.map(c=>'<span class="badge" style="background:rgba(96,165,250,.08);color:var(--blue);border:1px solid rgba(96,165,250,.15);margin-right:3px">'+c+'</span>').join('')+'</td></tr>'
+      '<td>'+g.classes.map(c=>'<span class="badge" style="background:rgba(106,160,200,.08);color:var(--blue);border:1px solid rgba(106,160,200,.15);margin-right:3px">'+c+'</span>').join('')+'</td></tr>'
     ).join('');
   } catch(e) { toast(e.message,'error'); }
 }

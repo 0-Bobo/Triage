@@ -28,7 +28,7 @@
   --text: #f4f4f4; --text-dim: #a8a8a8; --text-muted: #8f8f8f;
   /* monochrome accent (Prime Intellect leans on contrast, not hue) + status colours that mean something */
   --accent: #f4f4f4; --accent-dim: #b5b5b5; --accent-soft: rgba(244,244,244,.10);
-  --cyan: #6aa0c8; --cyan-dim: #4d7d9f; --blue: #6aa0c8; --violet: #9a8fc0;
+  --cyan: #6aa0c8; --cyan-dim: #4d7d9f; --blue: #6aa0c8; --violet: #9a8fc0; --violet-soft: rgba(154,143,192,.10);
   --green: #57b76a; --orange: #e8983a; --red: #e2635f; --yellow: #d4bb55;
   --sidebar-w: 64px; --titlebar-h: 42px; --radius: 0px;
   --font-mono: "Geist Mono", "JetBrains Mono", "Berkeley Mono", "Cascadia Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
@@ -261,7 +261,7 @@ input::placeholder { color:var(--text-muted); }
 .about-caps div { background:var(--surface); padding:10px 12px; font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:7px; }
 .about-caps div .ico { color:var(--accent); font-family:var(--font-mono); }
 .about-keys { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); display:grid; grid-template-columns:auto 1fr; gap:5px 14px; margin:6px 0 18px; }
-.about-keys kbd { background:var(--surface); border:1px solid var(--border-bright); border-radius:3px; padding:1px 6px; color:var(--text); font-size:10px; }
+.about-keys kbd { background:var(--surface); border:1px solid var(--border-bright); border-radius:var(--radius); padding:1px 6px; color:var(--text); font-size:10px; }
 .about-section-lbl { font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.8px; font-weight:600; margin:0 0 8px; }
 
 /* ── Responsive tweaks ──────────────────────────────────── */
