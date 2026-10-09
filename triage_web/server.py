@@ -13,7 +13,6 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 
 from triage_web.analysis import (
     VULN_BOF,
@@ -32,7 +31,7 @@ from triage_web.autopwn.runner import have_wsl
 from triage_web.config import DEFAULT_MNEMONIC_COLOR, VULN_SEVERITY_COLORS
 from triage_web.config import MNEMONIC_COLORS as MNEMONIC_COLOR_MAP
 from triage_web.engine import HAS_CAPSTONE, Disassembler, ROPEngine, XRefDB
-from triage_web.frontend import CSS_PAGE, HTML_PAGE
+from triage_web.frontend import HTML_PAGE
 from triage_web.knowledge import EXPLOIT_TECHNIQUES, MITRE_VULN_MAP, VULN_PATTERNS
 from triage_web.loader import BinaryLoader
 from triage_web.solvers import execute_solver, generate_solver, get_solver_list
@@ -61,9 +60,6 @@ def _cors_origins() -> list[str]:
 
 app = FastAPI(title="Triage Web", docs_url=None, redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_methods=["*"], allow_headers=["*"])
-# Geist Sans / Geist Mono .woff2 files referenced by style.css — static,
-# read-only assets, no templating.
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -1377,13 +1373,6 @@ def index():
             "X-Content-Type-Options": "nosniff",
         },
     )
-
-
-@app.get("/style.css")
-def style_css():
-    # Same no-store rationale as index(): a redeployed build's CSS must
-    # never be served from the browser cache.
-    return Response(CSS_PAGE, media_type="text/css", headers={"Cache-Control": "no-store"})
 
 
 # ══════════════════════════════════════════════════════════════════════
