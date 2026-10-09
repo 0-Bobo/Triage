@@ -13,7 +13,7 @@ The orientation map for picking the repo up cold; read it after the README. For 
 
 | Piece | Path | Status |
 |---|---|---|
-| **Web app** | `triage_web/` | The shipped product. FastAPI backend + single-file SPA. 100% line coverage on the shipped surface, 483 tests. |
+| **Web app** | `triage_web/` | The shipped product. FastAPI backend + SPA (`index.html` + `style.css`, no build step). 100% line coverage on the shipped surface, 505 tests. |
 | **autopwn** | `triage_web/autopwn/` | "Recon + first-move accelerator" (see §5). Importable library + `python -m triage_web.autopwn` CLI + three HTTP routes. |
 
 `main.py` launches it; CI builds it; the tests cover it.
@@ -25,8 +25,10 @@ The orientation map for picking the repo up cold; read it after the README. For 
 ```
 main.py                     thin launcher -> triage_web.server:main
 triage_web/                  the package (see §3)
-  index.html                 the entire SPA — HTML + CSS + JS in one file (~1918 lines)
-  frontend.py                reads index.html once at import into HTML_PAGE
+  index.html                 the SPA markup + JS (~1644 lines); style.css holds the CSS
+  style.css                  all page styles + @font-face (Geist Sans/Mono, static/fonts/*.woff2)
+  static/fonts/              Geist Sans/Mono .woff2 files + their OFL license
+  frontend.py                reads index.html/style.css once at import into HTML_PAGE/CSS_PAGE
   server.py                  FastAPI app: ~40 routes, upload handling, entry point
   analysis.py                pure domain helpers over BinaryLoader (no FastAPI)
   loader.py                  BinaryLoader — ELF/PE parse, protections, strings, hashes, arch detection

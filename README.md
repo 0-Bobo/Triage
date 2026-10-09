@@ -16,7 +16,7 @@ address, overflow offset, decoded self-modifying code, the compare constant, and
 so on) plus a runnable exploit skeleton. It solves the easy shapes outright; on
 the harder ones the ranked plan and the parameters are the point.
 
-The UI is a single `index.html` with no build step.
+The UI is `index.html` (markup/JS) + `style.css` (styles), no build step, no bundler.
 
 ## Quick start
 
