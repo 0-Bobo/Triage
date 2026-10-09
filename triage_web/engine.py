@@ -638,7 +638,7 @@ class Disassembler:
         regs: dict[str, str] = {}
         mem_state = SSAMemory()
 
-        def _resolve_op(op: str, width_hint: str = "") -> str:
+        def _resolve_op(op: str) -> str:
             op = op.strip()
             rv = _reg_lookup(op, regs)
             if rv is not None:
@@ -800,8 +800,8 @@ class Disassembler:
                         if jmn in ("cmp", "test", "cmpq", "testq"):
                             cond = insns[j]["op_str"]
                             break
-                    op_l = _resolve_op(cond.split(",")[0].strip(), "") if cond and "," in cond else ""
-                    op_r = _resolve_op(cond.split(",")[1].strip(), "") if cond and "," in cond else ""
+                    op_l = _resolve_op(cond.split(",")[0].strip()) if cond and "," in cond else ""
+                    op_r = _resolve_op(cond.split(",")[1].strip()) if cond and "," in cond else ""
                     c_op_map = {
                         "je": "==",
                         "jz": "==",
@@ -955,7 +955,7 @@ class Disassembler:
                     continue
                 dst64 = reg32_to_64.get(dst, dst)
                 if dst64 in arg_regs_64 and dst64 not in arg_vals:
-                    arg_vals[dst64] = resolve_op(parts[1], dst)
+                    arg_vals[dst64] = resolve_op(parts[1])
         for j in range(idx - 1, max(0, idx - 12) - 1, -1):
             if insns[j]["mnemonic"].lower() in ("call", "callq"):
                 break
@@ -1011,7 +1011,7 @@ class Disassembler:
                 ):
                     continue
                 arg_idx = len(stack_args)
-                val = resolve_op(push_val, "stack")
+                val = resolve_op(push_val)
                 if arg_idx not in stack_args:
                     write_order.append(arg_idx)
                 stack_args[arg_idx] = val
@@ -1032,7 +1032,7 @@ class Disassembler:
                     if off_val > 20:
                         continue
                     arg_idx = off_val // 4
-                    val = resolve_op(parts[1], "stack")
+                    val = resolve_op(parts[1])
                     if arg_idx not in stack_args:
                         write_order.append(arg_idx)
                     stack_args[arg_idx] = val

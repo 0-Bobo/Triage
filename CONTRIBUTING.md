@@ -23,8 +23,8 @@ uv sync --extra analysis --dev      # + symbolic/CAPA backends
 | --- | --- |
 | `make sync` | sync dependencies with uv |
 | `make test` | run pytest |
-| `make lint` | `ruff check .` |
-| `make format` | `ruff format .` |
+| `make lint` | `ruff check .` + `ruff format --check .` |
+| `make format` | `ruff format .` + `ruff check --fix .` |
 | `make check` | lint + test |
 | `make coverage` | pytest with term/html/xml coverage (`--cov=triage_web`) |
 | `make clean` | remove caches and build artifacts |

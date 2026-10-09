@@ -1,5 +1,5 @@
 """Static knowledge bases: vulnerability patterns, MITRE data, exploit techniques,
-crypto signatures, packer signatures, and MITRE ATT&CK mappings."""
+crypto signatures, and packer signatures."""
 
 # ── Vulnerability Patterns ─────────────────────────────────────────
 VULN_PATTERNS = {
@@ -216,47 +216,4 @@ STRING_SIGS = {
     ".NET": ["mscoree.dll", "_CorExeMain"],
     "Nim": ["NimMain", "nim_program_result"],
     "Rust": ["rust_begin_unwind", "__rust_alloc"],
-}
-
-# ── MITRE ATT&CK broad mapping ────────────────────────────────────
-MITRE_MAP = {
-    "execution": ("TA0002", "T1106", "Native API — direct syscall execution"),
-    "process": ("TA0002", "T1059", "Command and Scripting Interpreter"),
-    "anti-analysis": ("TA0005", "T1027", "Obfuscated Files or Information"),
-    "anti-behavioral": ("TA0005", "T1027.002", "Software Packing / obfuscation"),
-    "anti-static": ("TA0005", "T1027.001", "Binary Padding / stripped symbols"),
-    "persistence": ("TA0003", "T1547", "Boot or Logon Autostart Execution"),
-    "defense-evasion": ("TA0005", "T1055", "Process Injection"),
-    "privilege-escalation": ("TA0004", "T1068", "Exploitation for Privilege Escalation"),
-    "credential-access": ("TA0006", "T1003", "OS Credential Dumping"),
-    "discovery": ("TA0007", "T1082", "System Information Discovery"),
-    "lateral-movement": ("TA0008", "T1021", "Remote Services"),
-    "collection": ("TA0009", "T1005", "Data from Local System"),
-    "exfiltration": ("TA0010", "T1041", "Exfiltration Over C2 Channel"),
-    "command-and-control": ("TA0011", "T1071", "Application Layer Protocol"),
-    "impact": ("TA0040", "T1486", "Data Encrypted for Impact"),
-    "cryptography": ("TA0040", "T1027.013", "Encrypted/Encoded File (custom crypto)"),
-    "file-system": ("TA0007", "T1083", "File and Directory Discovery"),
-    "network": ("TA0011", "T1095", "Non-Application Layer Protocol"),
-    "heap": ("TA0005", "T1055.012", "Process Hollowing / heap spray"),
-    "injection": ("TA0005", "T1055", "Process Injection"),
-    "obfuscation": ("TA0005", "T1027", "Obfuscated Code"),
-    "packer": ("TA0005", "T1027.002", "Software Packing"),
-    "socket": ("TA0011", "T1095", "Non-Application Layer Protocol"),
-    "dns": ("TA0011", "T1071.004", "DNS Application Layer Protocol"),
-    "http": ("TA0011", "T1071.001", "Web Protocols"),
-    "registry": ("TA0003", "T1547.001", "Registry Run Keys / Startup Folder"),
-    "service": ("TA0003", "T1543", "Create or Modify System Process"),
-    "shellcode": ("TA0005", "T1059.006", "Shellcode / native execution"),
-    "rop": ("TA0005", "T1203", "Exploitation for Client Execution (ROP)"),
-    "format-string": ("TA0004", "T1203", "Exploitation — Format String"),
-    "buffer-overflow": ("TA0004", "T1203", "Exploitation — Stack Buffer Overflow"),
-    "use-after-free": ("TA0004", "T1203", "Exploitation — Use After Free"),
-    "heap-overflow": ("TA0004", "T1203", "Exploitation — Heap Overflow"),
-    "lib": ("TA0005", "T1129", "Shared Modules"),
-    "compiler": ("TA0005", "T1027", "Compiler/runtime artifacts"),
-    "string": ("TA0005", "T1027.005", "Indicator Removal / string obfuscation"),
-    "allocate": ("TA0005", "T1055.001", "DLL Injection / dynamic allocation"),
-    "send": ("TA0011", "T1041", "Exfiltration Over C2 Channel"),
-    "recv": ("TA0011", "T1071", "Application Layer Protocol — recv"),
 }
