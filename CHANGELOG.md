@@ -7,6 +7,21 @@ release.
 ## [Unreleased]
 
 ### Added
+- **`CONTEXT.md`** — newcomer-facing orientation map (what Triage is, the
+  static-analysis/`autopwn` mental model, reading order, a "where to make
+  a change" table, what's safe vs. load-bearing).
+- **`SECURITY.md`** — explicit threat model (unauthenticated local file
+  read + unauthenticated arbitrary code execution, by design, for a
+  single-user local tool) and a private disclosure channel.
+- **`.github/ISSUE_TEMPLATE/`** — bug report + feature request templates.
+- **`triage_web/style.css`** — CSS split out of `index.html` into its own
+  file; the five embedded base64 Geist Sans/Mono weights became real
+  `.woff2` files under `triage_web/static/fonts/` (served via a
+  `StaticFiles` mount), same same-origin guarantee, far smaller and more
+  readable.
+- **`--i-understand-the-network-risk`** — required alongside any
+  non-loopback `--host`; the server now refuses to start without it
+  instead of just printing a warning.
 - **`ARCHITECTURE.md`** — cold-start orientation map: the web request flow, the
   unwired p-code decompiler pipeline, the `autopwn`
   recon → classify → registry → strategy flow, the strategy catalog, the
@@ -29,6 +44,36 @@ release.
   fast test path.
 
 ### Fixed
+- **Two independent "ultra-deep" whole-repo review passes closed 10
+  findings**: unquoted/mis-quoted shell interpolation in the autopwn
+  WSL/POSIX bridge (CWE-78), no CSRF/Origin check on state-mutating
+  routes, `_srop_chain` crashing on every 32-bit target (plus a follow-up:
+  its payload-packing line still used a fixed-width pack regardless of
+  target bits), a `Session` singleton with no concurrency guard, an
+  upload path that didn't reject shell metacharacters, a missing
+  `Content-Security-Policy`/`X-Content-Type-Options` header, silent
+  odd-length hex-search truncation, one `esc()` coverage gap on the
+  disasm-table mnemonic cell, and doc drift (README port, stale test
+  counts).
+- **`solve_smc()` leaked a full copy of the target binary into the system
+  temp directory** on every run that didn't actually decode anything —
+  every binary classified as an SMC candidate that turned out not to be
+  one left a permanent `triage_smc_*` file behind.
+- **A stale `uv.lock` "desktop" extra** (PyQt6 and friends, left over from
+  a dependency group that no longer exists in `pyproject.toml`) forced an
+  unnecessary full re-resolution on `uv run`.
+- **`starlette.testclient.TestClient` only worked by accident** — `httpx`
+  reached the environment transitively via an optional IDA-plugin
+  dependency chain, not as a declared test dependency; a fresh environment
+  without that chain hit a hard `RuntimeError` at test collection. `httpx2`
+  (the actually-required package) is now declared directly.
+- Several AI-slop-adjacent frontend tells caught by an explicit design
+  audit: 8 stray `border-radius` values contradicting the CSS's own
+  sharp-corners rule, 3 inline colors that bypassed the design tokens for
+  raw, more-saturated defaults, and one full-color emoji among otherwise
+  single-tone section-label glyphs.
+- 24 findings from an earlier five-lens code review (2 Critical XSS, 3
+  High, 6 Medium, 13 Low) across the web surface.
 - **CI runs green on Linux** — the suite had only ever run on Windows. The first
   real CI run surfaced: `ruff format --check` reformatting Markdown code blocks;
   the sandbox picking `unshare` on hosts that block unprivileged user
