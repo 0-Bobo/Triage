@@ -62,9 +62,7 @@ class BinaryLoader:
             self._raw = bytearray(f.read())
 
         self._elf = self._elf_fh = self._pe = self._lief_bin = None
-        self._insn_cache: dict = {}
         self._vaddr_to_offset_cache: dict[int, int] = {}
-        self._info_cache = None
         self._entropy_cache = None
         self._text_cache = None
         self._hash_cache = None
@@ -74,7 +72,6 @@ class BinaryLoader:
         self._import_cache = None
         self._export_cache = None
         self._symbol_cache = None
-        self._cfg_cache: dict = {}
         self._strings_cache = None
         self._crypto_cache = None
         self._packer_cache = None
@@ -611,9 +608,6 @@ class BinaryLoader:
     # ── Cache management ────────────────────────────────────────
     def _clear_caches(self):
         self._vaddr_to_offset_cache.clear()
-        self._insn_cache.clear()
-        self._cfg_cache.clear()
-        self._info_cache = None
         self._entropy_cache = None
         self._text_cache = None
         self._hash_cache = None
