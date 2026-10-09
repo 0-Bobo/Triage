@@ -42,6 +42,10 @@
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { height:100%; background:var(--bg); color:var(--text); font-family:var(--font-sans); font-size:13px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+/* Faint fixed glow behind the whole app so the titlebar/tab-bar vibrancy
+   (backdrop-filter below) has something with texture to blur — a flat
+   solid background blurs into itself and the effect disappears. */
+body { background-image:radial-gradient(circle at 18% -10%, rgba(244,244,244,.08), transparent 45%), radial-gradient(circle at 85% 0%, rgba(244,244,244,.05), transparent 40%); background-attachment:fixed; }
 ::selection { background:rgba(244,244,244,.32); color:#0b0b0b; }
 ::-webkit-scrollbar { width:10px; height:10px; }
 ::-webkit-scrollbar-track { background:var(--bg2); }
