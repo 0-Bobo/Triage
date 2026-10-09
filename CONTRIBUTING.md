@@ -10,7 +10,9 @@ make check      # ruff lint + pytest — verify the setup
 ```
 
 `make dev` runs `uv sync --all-extras --dev`, which pulls the heavy optional
-backends (`angr`, `lief`, …). To work on the web core only:
+backends (`angr`, `lief`, …). The `Makefile` sets `UV_PROJECT_ENVIRONMENT=.uv`, so
+the uv env is `.uv`, not `.venv`; export the same variable when calling `uv`
+directly. To work on the web core only:
 
 ```bash
 uv sync --dev                       # runtime deps + dev tools, no extras

@@ -26,9 +26,14 @@ in:
 ```bash
 git clone --recurse-submodules https://github.com/0-Bobo/Triage
 cd Triage
+export UV_PROJECT_ENVIRONMENT=.uv     # PowerShell: $env:UV_PROJECT_ENVIRONMENT = ".uv"
 uv sync --extra analysis --extra exploit --dev
 uv run python main.py path/to/target
 ```
+
+The uv environment lives in `.uv` (the `Makefile` and CI set the same variable),
+which keeps `.venv` free for the plain-pip route below. Without the variable, uv
+creates `.venv` instead.
 
 Or with pip:
 
@@ -37,6 +42,9 @@ python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activat
 pip install -r requirements-web.txt
 python main.py path/to/target
 ```
+
+`requirements-web.txt` covers the web server plus angr, z3, unicorn and
+flare-capa; add `pip install pwntools` if you want the exploit helpers.
 
 Then open <http://127.0.0.1:8888>. The heavy backends (angr, unicorn,
 flare-capa, z3) are optional; each module checks for its dependency at import
