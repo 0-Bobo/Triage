@@ -612,3 +612,17 @@ def test_disasm_functions_exposes_the_renamed_binary_wide_field(app_client, samp
     assert funcs
     assert all("binary_has_vuln_calls" in f for f in funcs)
     assert all("is_vulnerable" not in f for f in funcs)
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
+def test_confirm_non_loopback_host_allows_loopback_without_the_ack_flag(host: str) -> None:
+    server._confirm_non_loopback_host(host, confirmed=False)  # no SystemExit
+
+
+def test_confirm_non_loopback_host_allows_a_wide_host_when_acknowledged() -> None:
+    server._confirm_non_loopback_host("0.0.0.0", confirmed=True)  # noqa: S104 - no SystemExit
+
+
+def test_confirm_non_loopback_host_refuses_a_wide_host_without_the_ack_flag() -> None:
+    with pytest.raises(SystemExit):
+        server._confirm_non_loopback_host("0.0.0.0", confirmed=False)  # noqa: S104

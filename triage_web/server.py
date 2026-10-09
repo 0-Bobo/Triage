@@ -1378,6 +1378,26 @@ def style_css():
 # Entry point
 # ══════════════════════════════════════════════════════════════════════
 
+_LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def _confirm_non_loopback_host(host: str, confirmed: bool) -> None:
+    """Refuse to start on a non-loopback --host unless paired with the
+    explicit --i-understand-the-network-risk flag. A printed warning alone
+    is too easy to scroll past when copying a demo command; requiring a
+    second, deliberate flag turns exposure into a real consent gate."""
+    if host in _LOOPBACK_HOSTS or confirmed:
+        return
+    log.error(
+        "Binding to %s exposes this server beyond localhost with no "
+        "authentication; /api/solver/execute runs arbitrary client-supplied "
+        "code and /api/load reads any local path the server process can "
+        "see. Re-run with --i-understand-the-network-risk to confirm you "
+        "trust this network.",
+        host,
+    )
+    sys.exit(1)
+
 
 def main():  # pragma: no cover - CLI entry point, starts uvicorn
     import argparse
@@ -1391,6 +1411,12 @@ def main():  # pragma: no cover - CLI entry point, starts uvicorn
     # to share with a CTF team on a trusted network.
     parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8888, help="Port (default: 8888)")
+    parser.add_argument(
+        "--i-understand-the-network-risk",
+        action="store_true",
+        dest="network_risk_ack",
+        help="Required alongside a non-loopback --host (no auth; /api/solver/execute runs arbitrary code)",
+    )
     args = parser.parse_args()
 
     if args.binary:
@@ -1414,13 +1440,7 @@ def main():  # pragma: no cover - CLI entry point, starts uvicorn
 
     import uvicorn
 
-    if args.host not in ("127.0.0.1", "localhost", "::1"):
-        log.warning(
-            "Binding to %s exposes this server beyond localhost. It has no "
-            "authentication and /api/solver/execute runs arbitrary client-"
-            "supplied code — only do this on a network you trust.",
-            args.host,
-        )
+    _confirm_non_loopback_host(args.host, args.network_risk_ack)
     log.info(f"Starting server at http://{args.host}:{args.port}")
     print(f"\n  \033[1;36mTriage  http://localhost:{args.port}\033[0m\n")
     # Plain host/port bind — portable across Linux and Windows. (An earlier
