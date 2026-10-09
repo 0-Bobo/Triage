@@ -261,6 +261,27 @@ def test_smc_on_a_plain_binary_reports_no_unwrap(vuln_samples):
     assert not res.ok and res.transform == "identity"  # already-clear code: nothing to peel
 
 
+def test_smc_discards_the_staged_tempfile_when_nothing_useful_resulted(vuln_samples):
+    """solve_smc() always stages its target in a ``triage_smc_*`` temp file to
+    work on. When the result doesn't hand that file back as ``decoded_path``
+    (no transform found here), the staged copy has no further use and must
+    not linger — every binary classified as an SMC candidate that turns out
+    not to be one would otherwise leak a full copy of itself into the temp
+    dir forever."""
+    import glob
+    import os
+    import tempfile
+
+    from triage_web.autopwn import strat_smc as smc
+
+    before = set(glob.glob(os.path.join(tempfile.gettempdir(), "triage_smc_*")))
+    res = smc.solve_smc(str(vuln_samples["vuln_rwx"]))
+    after = set(glob.glob(os.path.join(tempfile.gettempdir(), "triage_smc_*")))
+
+    assert res.decoded_path is None  # nothing useful to hand back
+    assert after == before  # ...so no new staged copy was left behind
+
+
 def test_smc_drops_an_overlapping_pt_load():
     import struct
 

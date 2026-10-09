@@ -27,6 +27,7 @@ are handed back — that is the manual next step served on a plate.
 from __future__ import annotations
 
 import importlib.util
+import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -366,6 +367,20 @@ def _neuter_antidebug(raw: bytearray, image_base: int, text: tuple[int, int]) ->
 # ── entry point ────────────────────────────────────────────────────────
 
 
+def _discard_unless_kept(work: str, result: SmcResult) -> SmcResult:
+    """Delete the staged ``work`` copy unless ``result`` hands it back as
+    ``decoded_path``. Every strategy run that doesn't produce a useful decode
+    has no further use for the on-disk copy — without this, every classified
+    SMC candidate that isn't actually decodable (the common case) leaves a
+    full copy of the binary behind in the temp dir forever."""
+    if result.decoded_path != work:
+        try:
+            os.unlink(work)
+        except OSError:
+            pass
+    return result
+
+
 def solve_smc(path: str, *, chain: bool = True, neuter_antidebug: bool = True, timeout: float = 30.0) -> SmcResult:
     if not HAS_CAPSTONE:
         return SmcResult(False, reason="capstone not installed")
@@ -389,7 +404,9 @@ def solve_smc(path: str, *, chain: bool = True, neuter_antidebug: bool = True, t
         bits = ldr.get_info().get("bits", 64)
         rwe = _rwe_region(ldr)
     except Exception as exc:  # pragma: no cover - repaired header still unparseable
-        return SmcResult(False, reason=f"cannot parse after repair: {exc}", header_repaired=repaired, log=log)
+        return _discard_unless_kept(
+            work, SmcResult(False, reason=f"cannot parse after repair: {exc}", header_repaired=repaired, log=log)
+        )
     finally:
         ldr.close()
 
@@ -400,20 +417,25 @@ def solve_smc(path: str, *, chain: bool = True, neuter_antidebug: bool = True, t
     if stub_region:
         log.append(f"entry decoder stub rewrites [0x{stub_region[0]:x}..0x{stub_region[0] + stub_region[1]:x}]")
     if region is None and not repaired:
-        return SmcResult(False, reason="no RWE segment and header looks intact — not an SMC target", log=log)
+        return _discard_unless_kept(
+            work, SmcResult(False, reason="no RWE segment and header looks intact — not an SMC target", log=log)
+        )
     off, length = region or (0, min(len(raw), 0x4000))
 
     name, tbl, score = _best_transform(bytes(raw[off : off + length]), bits)
     log.append(f"region [0x{off:x}..0x{off + length:x}] best unwrap: {name!r} (x86-valid score {score:.2f})")
     if name == "identity":
-        return SmcResult(
-            False,
-            reason="no per-byte transform made the RWE region look like code",
-            transform="identity",
-            region=(off, length),
-            header_repaired=repaired,
-            decoded_path=work if repaired else None,
-            log=log,
+        return _discard_unless_kept(
+            work,
+            SmcResult(
+                False,
+                reason="no per-byte transform made the RWE region look like code",
+                transform="identity",
+                region=(off, length),
+                header_repaired=repaired,
+                decoded_path=work if repaired else None,
+                log=log,
+            ),
         )
 
     raw[off : off + length] = _apply(tbl, bytes(raw[off : off + length]))
