@@ -13,7 +13,6 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 
 from triage_web.analysis import (
     VULN_BOF,
@@ -32,7 +31,7 @@ from triage_web.autopwn.runner import have_wsl
 from triage_web.config import DEFAULT_MNEMONIC_COLOR, VULN_SEVERITY_COLORS
 from triage_web.config import MNEMONIC_COLORS as MNEMONIC_COLOR_MAP
 from triage_web.engine import HAS_CAPSTONE, Disassembler, ROPEngine, XRefDB
-from triage_web.frontend import CSS_PAGE, HTML_PAGE
+from triage_web.frontend import HTML_PAGE
 from triage_web.knowledge import EXPLOIT_TECHNIQUES, MITRE_VULN_MAP, VULN_PATTERNS
 from triage_web.loader import BinaryLoader
 from triage_web.solvers import execute_solver, generate_solver, get_solver_list
@@ -61,11 +60,17 @@ def _cors_origins() -> list[str]:
 
 app = FastAPI(title="Triage Web", docs_url=None, redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_methods=["*"], allow_headers=["*"])
-# Geist Sans / Geist Mono .woff2 files referenced by style.css — static,
-# read-only assets, no templating.
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
+    "img-src 'self' data:; "
+    "object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
 
 
 @app.middleware("http")
@@ -1356,22 +1361,18 @@ def favicon():
 @app.get("/", response_class=HTMLResponse)
 def index():
     # no-store so a redeployed build's JS isn't served from the browser cache;
-    # CSP/nosniff are cheap defense-in-depth against a future XSS regression
+    # CSP/nosniff are cheap defense-in-depth against a future XSS regression.
+    # The UI is one file with inline <script>/<style>, onclick handlers and
+    # data: fonts/icons, so those are allowed; other origins, frames, plugins
+    # and base-uri stay locked down (see CSP_POLICY).
     return HTMLResponse(
         HTML_PAGE,
         headers={
             "Cache-Control": "no-store",
-            "Content-Security-Policy": "default-src 'self'",
+            "Content-Security-Policy": CSP_POLICY,
             "X-Content-Type-Options": "nosniff",
         },
     )
-
-
-@app.get("/style.css")
-def style_css():
-    # Same no-store rationale as index(): a redeployed build's CSS must
-    # never be served from the browser cache.
-    return Response(CSS_PAGE, media_type="text/css", headers={"Cache-Control": "no-store"})
 
 
 # ══════════════════════════════════════════════════════════════════════
