@@ -16,7 +16,7 @@ address, overflow offset, decoded self-modifying code, the compare constant, and
 so on) plus a runnable exploit skeleton. It solves the easy shapes outright; on
 the harder ones the ranked plan and the parameters are the point.
 
-The UI is `index.html` (markup/JS) + `style.css` (styles), no build step, no bundler.
+The UI is a single `index.html` (markup, inline JS, inline styles, embedded fonts), no build step, no bundler.
 
 ## Quick start
 
@@ -26,9 +26,14 @@ in:
 ```bash
 git clone --recurse-submodules https://github.com/0-Bobo/Triage
 cd Triage
+export UV_PROJECT_ENVIRONMENT=.uv     # PowerShell: $env:UV_PROJECT_ENVIRONMENT = ".uv"
 uv sync --extra analysis --extra exploit --dev
 uv run python main.py path/to/target
 ```
+
+The uv environment lives in `.uv` (the `Makefile` and CI set the same variable),
+which keeps `.venv` free for the plain-pip route below. Without the variable, uv
+creates `.venv` instead.
 
 Or with pip:
 
@@ -37,6 +42,9 @@ python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activat
 pip install -r requirements-web.txt
 python main.py path/to/target
 ```
+
+`requirements-web.txt` covers the web server plus angr, z3, unicorn and
+flare-capa; add `pip install pwntools` if you want the exploit helpers.
 
 Then open <http://127.0.0.1:8888>. The heavy backends (angr, unicorn,
 flare-capa, z3) are optional; each module checks for its dependency at import
@@ -132,8 +140,7 @@ triage_web/
   loader.py  engine.py   ELF/PE parsing; Capstone disasm, ROP, xrefs
   pcode.py cfg.py ...     the experimental p-code decompiler (not yet wired)
   autopwn/               the recon + strategy layer
-  index.html style.css   the SPA (markup/JS + styles, no build step)
-  static/                fonts served via a StaticFiles mount
+  index.html             the whole SPA: markup + inline styles/JS + embedded fonts, no build step
 tests/                   pytest suite plus the golden-recon fixtures
 samples/                 small purpose-built test binaries and their C source
 ```
@@ -148,7 +155,7 @@ make check      # ruff check + ruff format --check + pytest
 make coverage   # + term-missing / html / xml
 ```
 
-- 511 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
+- 508 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
   layer drives angr/unicorn/pwntools, so it is exercised end to end but left out
   of the line-coverage gate; `make coverage-strat` reports its real number, and a
   module only joins that opt-out list together with a golden-output test.

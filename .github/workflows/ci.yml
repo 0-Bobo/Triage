@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: "0 6 * * 1"   # Mondays 06:00 UTC — run the deps-canary job below
 
+env:
+  UV_PROJECT_ENVIRONMENT: .uv   # match the Makefile so `uv sync` and `make` share one env
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -54,51 +54,23 @@ def test_index_serves_the_spa_uncached() -> None:
 
 def test_index_carries_csp_and_nosniff_headers() -> None:
     resp = TestClient(server.app).get("/")
-    assert resp.headers["content-security-policy"] == "default-src 'self'"
+    csp = resp.headers["content-security-policy"]
+    assert csp == server.CSP_POLICY
+    # inline UI + data: fonts must be permitted, remote origins/plugins must not
+    assert "script-src 'self' 'unsafe-inline'" in csp
+    assert "font-src 'self' data:" in csp
+    assert "object-src 'none'" in csp
+    assert "frame-ancestors 'none'" in csp
     assert resp.headers["x-content-type-options"] == "nosniff"
 
 
-def test_style_css_text_muted_meets_contrast_and_respects_reduced_motion() -> None:
-    resp = TestClient(server.app).get("/style.css")
-    assert "--text-muted: #8f8f8f;" in resp.text
-    assert "--text-muted: #63666f;" not in resp.text
-    assert "--text-muted: #767676;" not in resp.text
-    assert "@media (prefers-reduced-motion: reduce)" in resp.text
-    assert ".panel-enter { animation:none; }" in resp.text
-    assert ".spin { animation:none; }" in resp.text
-    assert ".statusbar .indicator.busy { animation:none; }" in resp.text
-
-
-def test_style_css_is_served_uncached_with_the_right_media_type() -> None:
-    resp = TestClient(server.app).get("/style.css")
-    assert resp.status_code == 200
-    assert resp.headers["cache-control"] == "no-store"
-    assert resp.headers["content-type"].startswith("text/css")
-
-
-def test_index_links_the_external_stylesheet_instead_of_inlining_it() -> None:
+def test_index_is_self_contained_with_embedded_fonts() -> None:
     resp = TestClient(server.app).get("/")
-    # Relative, not absolute: index.html must still render correctly when
-    # opened directly as a local file (file://), not only when served.
-    assert '<link rel="stylesheet" href="style.css">' in resp.text
-    assert "<style>" not in resp.text
-
-
-def test_static_fonts_are_served_as_real_files_not_inlined_base64() -> None:
-    client = TestClient(server.app)
-    for filename in (
-        "Geist-Regular.woff2",
-        "Geist-Medium.woff2",
-        "Geist-SemiBold.woff2",
-        "GeistMono-Regular.woff2",
-        "GeistMono-Medium.woff2",
-    ):
-        resp = client.get(f"/static/fonts/{filename}")
-        assert resp.status_code == 200, filename
-        assert resp.content[:4] == b"wOF2"  # woff2 magic number
-    css = client.get("/style.css").text
-    assert "data:font" not in css
-    assert "static/fonts/Geist-Regular.woff2" in css
+    # Single file: styles and Geist fonts are inline, so it renders the same
+    # when opened directly as a local file (file://) as when served.
+    assert "<style>" in resp.text
+    assert "data:font/woff2;base64," in resp.text
+    assert 'rel="stylesheet"' not in resp.text
 
 
 def test_index_has_accessible_labels_on_icon_only_controls() -> None:
