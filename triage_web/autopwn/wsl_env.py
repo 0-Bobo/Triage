@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 
 from triage_web.autopwn import runner
 
@@ -32,6 +33,10 @@ _PROBE = (
 )
 
 _FIELD_NAMES = ("wsl_installed", "distro_running", "venv_exists", "pwntools_ok", "triton_ok")
+
+# Three ``.parent`` hops from triage_web/autopwn/wsl_env.py reaches the repo
+# root, where wsl/ already lives alongside triage_web/.
+_SETUP_SCRIPT = Path(__file__).resolve().parent.parent.parent / "wsl" / "setup_pwn_env.sh"
 
 
 @dataclass
@@ -70,12 +75,38 @@ def detect(*, timeout: float = 15.0) -> WslEnvStatus:
     )
 
 
+def run_setup(*, timeout: float = 1800.0) -> runner.ProcResult:
+    """Run ``wsl/setup_pwn_env.sh`` to provision or repair ``~/pwn-venv``.
+
+    On Linux it runs the script directly; on Windows it's driven through WSL
+    exactly like every other script ``runner`` executes. Never raises - a
+    non-runnable ``ProcResult`` comes back when neither path is available.
+    """
+    if runner.platform.system() == "Linux":
+        return runner._popen(["bash", str(_SETUP_SCRIPT)], b"", timeout)
+
+    if not runner.have_wsl():
+        return runner.ProcResult(
+            None, b"", b"WSL not installed (wsl.exe not found on PATH)", False, 0.0, "", runnable=False
+        )
+
+    wsl_path = runner.to_wsl(_SETUP_SCRIPT)
+    return runner._wsl_bash(f"bash {runner._sh_quote(wsl_path)}", b"", timeout)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="python -m triage_web.autopwn.wsl_env",
         description=__doc__,
     )
-    ap.parse_args(argv)
+    ap.add_argument("--setup", action="store_true", help="provision/repair ~/pwn-venv instead of just detecting it")
+    ap.add_argument("--timeout", type=float, default=1800.0, help="seconds to allow the setup script to run")
+    args = ap.parse_args(argv)
+
+    if args.setup:
+        result = run_setup(timeout=args.timeout)
+        print(result.text)
+        return 0 if result.returncode == 0 else 1
 
     status = detect()
     for field_name in _FIELD_NAMES:

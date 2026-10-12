@@ -6,7 +6,7 @@ import pytest
 
 from triage_web.autopwn import runner
 from triage_web.autopwn.runner import ProcResult
-from triage_web.autopwn.wsl_env import detect, main
+from triage_web.autopwn.wsl_env import _SETUP_SCRIPT, detect, main, run_setup
 
 
 def _result(text: str, *, runnable: bool = True, timed_out: bool = False, returncode: int | None = 0) -> ProcResult:
@@ -138,3 +138,83 @@ def test_main_rejects_an_unrecognized_flag():
     with pytest.raises(SystemExit) as exc_info:
         main(["--bogus"])
     assert exc_info.value.code == 2
+
+
+# ── Task 2: run_setup() branches ────────────────────────────────────
+
+
+def test_run_setup_on_linux_runs_script_directly(monkeypatch):
+    calls = []
+
+    def fake_popen(cmd, stdin, timeout):
+        calls.append((cmd, stdin, timeout))
+        return _result("ok")
+
+    monkeypatch.setattr(runner.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runner, "_popen", fake_popen)
+    result = run_setup(timeout=42.0)
+    assert result.text.startswith("ok")
+    assert calls == [(["bash", str(_SETUP_SCRIPT)], b"", 42.0)]
+
+
+def test_run_setup_on_windows_without_wsl_does_not_shell_out(monkeypatch):
+    monkeypatch.setattr(runner.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(runner, "have_wsl", lambda: False)
+    monkeypatch.setattr(runner, "_popen", lambda *_a: pytest.fail("should not shell out"))
+    monkeypatch.setattr(runner, "_wsl_bash", lambda *_a: pytest.fail("should not shell out"))
+    result = run_setup()
+    assert result.runnable is False
+    assert "WSL not installed" in result.text
+
+
+def test_run_setup_on_windows_with_wsl_drives_through_wsl_bash(monkeypatch):
+    calls = []
+
+    def fake_wsl_bash(script, stdin, timeout):
+        calls.append((script, stdin, timeout))
+        return _result("done")
+
+    monkeypatch.setattr(runner.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(runner, "have_wsl", lambda: True)
+    monkeypatch.setattr(runner, "_wsl_bash", fake_wsl_bash)
+    result = run_setup(timeout=99.0)
+    assert result.text.startswith("done")
+    assert len(calls) == 1
+    script, stdin, timeout = calls[0]
+    assert script.startswith("bash ")
+    assert runner.to_wsl(_SETUP_SCRIPT) in script
+    assert stdin == b""
+    assert timeout == 99.0
+
+
+def test_main_setup_flag_calls_run_setup_and_returns_zero_on_success(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "triage_web.autopwn.wsl_env.run_setup", lambda *, timeout: _result("[PASS] pwntools\n==> all checks passed")
+    )
+    rc = main(["--setup"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[PASS] pwntools" in out
+
+
+def test_main_setup_flag_returns_one_on_failure(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "triage_web.autopwn.wsl_env.run_setup",
+        lambda *, timeout: _result("[FAIL] triton-library: boom", returncode=1),
+    )
+    rc = main(["--setup"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "[FAIL] triton-library: boom" in out
+
+
+def test_main_setup_flag_passes_through_custom_timeout(monkeypatch):
+    seen = {}
+
+    def fake_run_setup(*, timeout):
+        seen["timeout"] = timeout
+        return _result("ok")
+
+    monkeypatch.setattr("triage_web.autopwn.wsl_env.run_setup", fake_run_setup)
+    main(["--setup", "--timeout", "5"])
+    assert seen["timeout"] == 5.0
