@@ -6,9 +6,8 @@ exploitation/reverse-engineering technique.
 
 import logging
 import os
-import subprocess
-import sys
-import tempfile
+
+from triage_web.autopwn.runner import run_path, run_script
 
 log = logging.getLogger("triage-web")
 
@@ -630,10 +629,19 @@ def generate_solver(
     ``pop_rdi``/``overflow_offset`` are real values recovered from the loaded
     binary (``analysis.scan_gadgets``/``analysis.overflow_sites``); templates
     that use them fall back to a documented placeholder when omitted.
+
+    ``path`` is translated via ``run_path()`` when it points at a real file,
+    so the baked-in ``BINARY`` is openable from wherever ``execute_solver()``
+    ends up running it (WSL on Windows) — the same translation every other
+    autopwn strategy applies before embedding a path in a generated script.
+    Placeholder paths used by syntax-only tests (e.g. ``./target.bin``) are
+    left untouched since nothing will ever open them.
     """
     gen = SOLVER_GENERATORS.get(solver_type)
     if gen is None:
         raise ValueError(f"Unknown solver type: {solver_type}")
+    if os.path.exists(path):
+        path = run_path(path)
     return gen(path, bits, arch, pop_rdi, overflow_offset)
 
 
@@ -643,40 +651,28 @@ def get_solver_list() -> list:
 
 
 def execute_solver(code: str) -> dict:
-    """Write solver code to a temp file and execute it in a subprocess.
+    """Run solver code through the sandboxed WSL/Linux execution route.
 
     Returns dict with stdout, stderr, returncode.
     """
     if not code.strip():
         return {"stdout": "", "stderr": "No code provided", "returncode": -1}
 
-    tmp = None
     try:
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8")
-        tmp.write(code)
-        tmp.close()
-        r = subprocess.run(
-            [sys.executable, tmp.name],
-            capture_output=True,
-            text=True,
-            timeout=SOLVER_TIMEOUT,
-        )
-        return {
-            "stdout": r.stdout,
-            "stderr": r.stderr,
-            "returncode": r.returncode,
-        }
-    except subprocess.TimeoutExpired:
+        r = run_script(code, timeout=SOLVER_TIMEOUT)
+    except Exception as e:
+        return {"stdout": "", "stderr": str(e), "returncode": -1}
+
+    if r.timed_out:
         return {
             "stdout": "",
             "stderr": f"Execution timed out after {SOLVER_TIMEOUT} seconds",
             "returncode": -1,
         }
-    except Exception as e:
-        return {"stdout": "", "stderr": str(e), "returncode": -1}
-    finally:
-        if tmp and os.path.exists(tmp.name):
-            try:
-                os.unlink(tmp.name)
-            except OSError:
-                pass
+    if not r.runnable:
+        return {"stdout": "", "stderr": r.stderr.decode("utf-8", "replace"), "returncode": -1}
+    return {
+        "stdout": r.stdout.decode("utf-8", "replace"),
+        "stderr": r.stderr.decode("utf-8", "replace"),
+        "returncode": r.returncode,
+    }
