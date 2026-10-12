@@ -557,6 +557,29 @@ def test_fmt_generates_a_probe_script_for_a_non_running_target(pe_path):
     assert not r.ok
 
 
+def test_fmt_local_probe_reaches_the_shared_runner_route(vuln_samples):
+    """vuln_pie has no socket/bind/listen/accept imports, so solve_format_string
+    takes the local-probe run_script() branch in strat_fmt.py — the same
+    shared WSL/sandbox route autopwn's other live strategies use.
+
+    vuln_pie's vuln() only runs when invoked with an argv (``if (argc > 1)
+    vuln(argv[1])``); the generated probe script drives it over stdin, so
+    the process exits before the probe is sent and pwntools' own
+    ``tubes/process.py`` raises EOFError instead of reaching the trailing
+    ``print("\\nFLAG:", ...)`` line. That EOFError traceback is still proof
+    the route was reached rather than short-circuited to the no-runtime
+    fallback: pwnlib's own source path can only show up in the leak if
+    pwntools genuinely executed inside WSL/Linux.
+    """
+    from triage_web.autopwn.strat_fmt import solve_format_string
+
+    res = solve_format_string(str(vuln_samples["vuln_pie"]))
+    if _CAN_RUN_ELF:
+        assert "FLAG:" in res.leak or "pwnlib" in res.leak
+    else:
+        assert res.script
+
+
 def test_fmt_server_argv_uses_native_shell_on_linux(monkeypatch):
     from triage_web.autopwn import strat_fmt
 

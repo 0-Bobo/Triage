@@ -12,6 +12,7 @@ import ast
 import pytest
 
 from triage_web import solvers
+from triage_web.autopwn.runner import ProcResult
 
 
 def test_solver_list_matches_generators() -> None:
@@ -228,16 +229,39 @@ def test_execute_solver_wraps_unexpected_errors(monkeypatch: pytest.MonkeyPatch)
     def boom(*_a, **_k):
         raise RuntimeError("subprocess exploded")
 
-    monkeypatch.setattr(solvers.subprocess, "run", boom)
+    monkeypatch.setattr(solvers, "run_script", boom)
     r = solvers.execute_solver("print('hi')")
     assert r["returncode"] == -1
     assert "subprocess exploded" in r["stderr"]
 
 
-def test_execute_solver_survives_a_cleanup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    def no_unlink(_path):
-        raise OSError("held open")
+def test_execute_solver_reports_the_strict_sandbox_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    refusal = b"sandbox: no bwrap/unshare available - target ran UNSANDBOXED - refused (TRIAGE_SANDBOX=strict)"
+    unrunnable = ProcResult(
+        returncode=None,
+        stdout=b"",
+        stderr=refusal,
+        timed_out=False,
+        seconds=0.0,
+        cmd="",
+        runnable=False,
+    )
+    monkeypatch.setattr(solvers, "run_script", lambda *a, **k: unrunnable)
+    r = solvers.execute_solver("print('hi')")
+    assert r["returncode"] == -1
+    assert refusal.decode() in r["stderr"]
 
-    monkeypatch.setattr(solvers.os, "unlink", no_unlink)
-    r = solvers.execute_solver("print('ok')")
-    assert r["returncode"] == 0 and r["stdout"].strip() == "ok"
+
+def test_execute_solver_reports_a_timeout_from_run_script(monkeypatch: pytest.MonkeyPatch) -> None:
+    timed_out = ProcResult(
+        returncode=None,
+        stdout=b"",
+        stderr=b"",
+        timed_out=True,
+        seconds=0.0,
+        cmd="",
+    )
+    monkeypatch.setattr(solvers, "run_script", lambda *a, **k: timed_out)
+    r = solvers.execute_solver("print('hi')")
+    assert r["returncode"] == -1
+    assert "timed out" in r["stderr"]

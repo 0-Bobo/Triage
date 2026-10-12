@@ -252,10 +252,9 @@ def api_status():
     """Installed/available status of every optional engine the app can use.
 
     Two different things get executed against two different Python
-    environments: /api/solver/execute runs a generated script with
-    ``sys.executable`` (this server's own environment), while autopwn's
-    live strategies shell out to WSL/wine per runner.py. ``installed`` here
-    checks the former — the environment a "Run" click actually uses.
+    environments: /api/solver/execute now shells out through the same
+    runner.py WSL/sandbox route autopwn's live strategies use. ``installed``
+    here checks the former — the environment a "Run" click actually uses.
     """
     import importlib.util
 
