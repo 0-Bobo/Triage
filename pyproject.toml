@@ -44,7 +44,16 @@ triage-autopwn = "triage_web.autopwn.__main__:main"
 # test suite via the app_client fixture) - previously only present by
 # accident via flare-capa's optional IDA-plugin chain, which a fresh
 # environment isn't guaranteed to resolve the same way.
-dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6.9", "pre-commit>=3.8", "pip-audit>=2.7", "httpx2>=2.12"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "ruff>=0.6.9",
+    "pre-commit>=3.8",
+    "pip-audit>=2.7",
+    "httpx2>=2.12",
+    "urllib3>=2.8.0",
+    "virtualenv>=21.7.13",
+]
 
 [build-system]
 requires = ["hatchling"]

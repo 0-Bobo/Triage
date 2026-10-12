@@ -1,5 +1,8 @@
 .PHONY: help install sync test lint format check coverage coverage-strat audit clean dev autopwn deps-canary
 
+# uv env lives in .uv so .venv stays free for plain `python -m venv` + pip
+export UV_PROJECT_ENVIRONMENT := .uv
+
 help:
 	@echo "Available targets:"
 	@echo "  install    - Install uv if not present and sync dependencies"
