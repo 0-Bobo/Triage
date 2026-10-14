@@ -1837,6 +1837,11 @@ function onShowSolver() {
 // ── Status ─────────────────────────────────────────────────────────────
 // Doesn't need a binary loaded — this reports on the environment, not the
 // current analysis session.
+const AVAILABILITY_BADGES = {
+  native: '<span class="badge badge-low">Installed</span>',
+  wsl: '<span class="badge badge-low">Installed via WSL</span>',
+  missing: '<span class="badge badge-crit">Missing</span>',
+};
 async function loadStatus() {
   const container = document.getElementById('status-container');
   const rt = document.getElementById('status-runtime');
@@ -1845,9 +1850,7 @@ async function loadStatus() {
     const r = await fetch('/api/status');
     const data = await r.json();
     container.innerHTML = (data.engines || []).map(e => {
-      const badge = e.installed
-        ? '<span class="badge badge-low">Installed</span>'
-        : '<span class="badge badge-crit">Missing</span>';
+      const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;
       const detail = e.detail ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + esc(e.detail) + '</div>' : '';
       return '<div class="vuln-item"><span class="vuln-name" style="min-width:90px">' + esc(e.name) + '</span>' +
         '<span class="vuln-desc" style="flex:1">' + esc(e.role) + detail + '</span>' + badge + '</div>';

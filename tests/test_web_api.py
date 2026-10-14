@@ -36,13 +36,24 @@ def test_health_reports_dependency_flags() -> None:
     assert {"pyelftools", "pefile", "capstone", "lief"} <= body["deps"].keys()
 
 
-def test_status_reports_every_engine_with_a_bool_installed_flag() -> None:
+def test_status_reports_every_engine_with_a_three_way_availability() -> None:
     body = TestClient(server.app).get("/api/status").json()
     ids = {e["id"] for e in body["engines"]}
     assert {"capstone", "pyelftools", "pefile", "lief", "capa", "angr", "z3", "unicorn", "triton", "pwntools"} <= ids
     for e in body["engines"]:
         assert isinstance(e["installed"], bool)
+        assert e["availability"] in {"native", "wsl", "missing"}
+        assert e["installed"] == (e["availability"] != "missing")
     assert body["runtime"]["platform"]
+
+
+def test_index_status_panel_renders_three_way_availability() -> None:
+    resp = TestClient(server.app).get("/")
+    assert '<span class="badge badge-low">Installed</span>' in resp.text
+    assert '<span class="badge badge-low">Installed via WSL</span>' in resp.text
+    assert '<span class="badge badge-crit">Missing</span>' in resp.text
+    assert "const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;" in resp.text
+    assert "e.installed" not in resp.text
 
 
 def test_index_serves_the_spa_uncached() -> None:
