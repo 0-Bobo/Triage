@@ -624,7 +624,7 @@ input::placeholder { color:var(--text-muted); }
       <!-- ===== Status ===== -->
       <div class="panel" id="panel-status">
         <div class="tb">
-          <button class="btn btn-primary" onclick="loadStatus()">&#8635; Refresh</button>
+          <button class="btn btn-primary" onclick="loadStatus(true)">&#8635; Refresh</button>
           <span class="v" id="status-runtime"></span>
         </div>
         <div class="scroll" style="padding:14px"><div style="max-width:760px" id="status-container"></div></div>
@@ -1836,18 +1836,20 @@ function onShowSolver() {
 
 // ── Status ─────────────────────────────────────────────────────────────
 // Doesn't need a binary loaded — this reports on the environment, not the
-// current analysis session.
+// current analysis session. Opening the tab reuses the server's memoized
+// WSL probe, and Refresh forces a re-probe so a newly provisioned venv
+// appears.
 const AVAILABILITY_BADGES = {
   native: '<span class="badge badge-low">Installed</span>',
   wsl: '<span class="badge badge-low">Installed via WSL</span>',
   missing: '<span class="badge badge-crit">Missing</span>',
 };
-async function loadStatus() {
+async function loadStatus(refresh) {
   const container = document.getElementById('status-container');
   const rt = document.getElementById('status-runtime');
   container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Checking…</div>';
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch('/api/status' + (refresh ? '?refresh=1' : ''));
     const data = await r.json();
     container.innerHTML = (data.engines || []).map(e => {
       const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;

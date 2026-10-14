@@ -54,6 +54,10 @@ def test_index_status_panel_renders_three_way_availability() -> None:
     assert '<span class="badge badge-crit">Missing</span>' in resp.text
     assert "const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;" in resp.text
     assert "e.installed" not in resp.text
+    assert 'onclick="loadStatus(true)"' in resp.text
+    assert "fetch('/api/status' + (refresh ? '?refresh=1' : ''))" in resp.text
+    assert "function onShowStatus() { loadStatus(); }" in resp.text
+    assert 'onclick="loadStatus()"' not in resp.text
 
 
 def test_index_serves_the_spa_uncached() -> None:

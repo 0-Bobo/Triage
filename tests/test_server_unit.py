@@ -32,6 +32,16 @@ def app_client() -> TestClient:
     return TestClient(server.app)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_wsl_probe():
+    """_wsl_env_status() is memoized per process (functools.cache) so a
+    cached fake probe from one test would otherwise leak into the next test
+    — including test_web_api's real, unmocked /api/status call."""
+    server._wsl_env_status.cache_clear()
+    yield
+    server._wsl_env_status.cache_clear()
+
+
 # ── Session accessors ─────────────────────────────────────────────────
 
 
@@ -768,3 +778,42 @@ def test_api_status_routed_engines_map_to_real_probe_fields() -> None:
     field_names = {f.name for f in dataclasses.fields(wsl_env.WslEnvStatus)}
     for field_name in server._WSL_ROUTED_ENGINES.values():
         assert field_name in field_names
+
+
+def test_api_status_memoizes_the_wsl_probe_until_refresh(app_client: TestClient, monkeypatch) -> None:
+    _native(monkeypatch, absent=_ROUTED_MODULES)
+    calls = []
+
+    def counting_detect(**_k):
+        calls.append(1)
+        return _probe(pwntools=True, triton=True, z3=True, angr=True, unicorn=True)
+
+    monkeypatch.setattr(wsl_env, "detect", counting_detect)
+
+    app_client.get("/api/status")
+    app_client.get("/api/status")
+    assert len(calls) == 1
+
+    app_client.get("/api/status?refresh=1")
+    assert len(calls) == 2
+
+    app_client.get("/api/status")
+    assert len(calls) == 2
+
+
+def test_api_status_refresh_picks_up_a_newly_provisioned_venv(app_client: TestClient, monkeypatch) -> None:
+    _native(monkeypatch, absent=_ROUTED_MODULES)
+    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(triton=False))
+    body = app_client.get("/api/status").json()
+    triton = next(e for e in body["engines"] if e["id"] == "triton")
+    assert triton["availability"] == "missing"
+
+    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(triton=True))
+
+    body = app_client.get("/api/status").json()
+    triton = next(e for e in body["engines"] if e["id"] == "triton")
+    assert triton["availability"] == "missing"  # memoized, not re-probed
+
+    body = app_client.get("/api/status?refresh=1").json()
+    triton = next(e for e in body["engines"] if e["id"] == "triton")
+    assert triton["availability"] == "wsl"
