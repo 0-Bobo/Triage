@@ -653,7 +653,14 @@ def _native(monkeypatch: pytest.MonkeyPatch, *, present: tuple[str, ...] = (), a
 
 
 def _probe(
-    *, pwntools: bool = False, triton: bool = False, wsl_installed: bool = True, detail: str = ""
+    *,
+    pwntools: bool = False,
+    triton: bool = False,
+    z3: bool = False,
+    angr: bool = False,
+    unicorn: bool = False,
+    wsl_installed: bool = True,
+    detail: str = "",
 ) -> wsl_env.WslEnvStatus:
     return wsl_env.WslEnvStatus(
         wsl_installed=wsl_installed,
@@ -661,6 +668,9 @@ def _probe(
         venv_exists=wsl_installed,
         pwntools_ok=pwntools,
         triton_ok=triton,
+        z3_ok=z3,
+        angr_ok=angr,
+        unicorn_ok=unicorn,
         detail=detail,
     )
 
@@ -683,41 +693,78 @@ def test_api_status_reports_native_without_probing_wsl(app_client: TestClient, m
     engines = _engines(app_client)
     assert engines["pwntools"]["availability"] == "native"
     assert engines["triton"]["availability"] == "native"
+    assert engines["angr"]["availability"] == "native" and "detail" not in engines["angr"]
+    assert engines["z3"]["availability"] == "native" and "detail" not in engines["z3"]
+    assert engines["unicorn"]["availability"] == "native" and "detail" not in engines["unicorn"]
 
 
 def test_api_status_reports_wsl_when_only_the_wsl_venv_has_it(app_client: TestClient, monkeypatch) -> None:
     _native(monkeypatch, absent=_ROUTED_MODULES)
-    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=True))
+    monkeypatch.setattr(
+        wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=True, z3=True, angr=True, unicorn=True)
+    )
     engines = _engines(app_client)
-    assert engines["pwntools"]["availability"] == "wsl" and engines["pwntools"]["installed"]
-    assert engines["triton"]["availability"] == "wsl" and engines["triton"]["installed"]
+    for eid in _ROUTED_MODULES:
+        key = "pwntools" if eid == "pwn" else eid
+        assert engines[key]["availability"] == "wsl" and engines[key]["installed"]
 
 
 def test_api_status_reports_missing_when_neither_route_has_it(app_client: TestClient, monkeypatch) -> None:
     _native(monkeypatch, absent=_ROUTED_MODULES)
-    monkeypatch.setattr(
-        wsl_env, "detect", lambda **_k: _probe(pwntools=False, triton=False, detail="SENTINEL-WSL-OUTPUT")
-    )
+    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(detail="SENTINEL-WSL-OUTPUT"))
     r = app_client.get("/api/status")
     engines = _engines(app_client)
-    assert engines["pwntools"]["availability"] == "missing" and not engines["pwntools"]["installed"]
-    assert engines["triton"]["availability"] == "missing" and not engines["triton"]["installed"]
+    for eid in _ROUTED_MODULES:
+        key = "pwntools" if eid == "pwn" else eid
+        assert engines[key]["availability"] == "missing" and not engines[key]["installed"]
+        assert "detail" not in engines[key]
     assert "SENTINEL-WSL-OUTPUT" not in r.text
 
 
 def test_api_status_uses_per_tool_wsl_flags(app_client: TestClient, monkeypatch) -> None:
     _native(monkeypatch, absent=_ROUTED_MODULES)
-    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=False))
+    monkeypatch.setattr(
+        wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=False, z3=True, angr=False, unicorn=True)
+    )
     engines = _engines(app_client)
     assert engines["pwntools"]["availability"] == "wsl"
     assert engines["triton"]["availability"] == "missing"
+    assert engines["z3"]["availability"] == "wsl"
+    assert engines["angr"]["availability"] == "missing"
+    assert engines["unicorn"]["availability"] == "wsl"
 
 
 def test_api_status_never_reports_in_process_engines_via_wsl(app_client: TestClient, monkeypatch) -> None:
     _native(monkeypatch, absent=("capa", *_ROUTED_MODULES))
-    monkeypatch.setattr(wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=True))
+    monkeypatch.setattr(
+        wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=True, z3=True, angr=True, unicorn=True)
+    )
     engines = _engines(app_client)
     assert engines["capa"]["availability"] == "missing" and not engines["capa"]["installed"]
     for eid, e in engines.items():
         if eid not in server._WSL_ROUTED_ENGINES:
             assert e["availability"] != "wsl"
+
+
+def test_api_status_notes_the_autopwn_strategies_a_wsl_copy_cannot_run(app_client: TestClient, monkeypatch) -> None:
+    _native(monkeypatch, absent=_ROUTED_MODULES)
+    monkeypatch.setattr(
+        wsl_env, "detect", lambda **_k: _probe(pwntools=True, triton=True, z3=True, angr=True, unicorn=True)
+    )
+    engines = _engines(app_client)
+    assert "needs a native install" in engines["angr"]["detail"]
+    assert "angr" in engines["angr"]["detail"]
+    assert "ret2win" in engines["angr"]["detail"]
+    assert "z3" in engines["z3"]["detail"]
+    assert "emulate" in engines["unicorn"]["detail"]
+    assert "detail" not in engines["pwntools"]
+    assert "detail" not in engines["triton"]
+
+
+def test_api_status_routed_engines_map_to_real_probe_fields() -> None:
+    import dataclasses
+
+    assert set(server._WSL_ROUTED_ENGINES) == {"pwntools", "triton", "z3", "angr", "unicorn"}
+    field_names = {f.name for f in dataclasses.fields(wsl_env.WslEnvStatus)}
+    for field_name in server._WSL_ROUTED_ENGINES.values():
+        assert field_name in field_names
