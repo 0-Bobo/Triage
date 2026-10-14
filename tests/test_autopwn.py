@@ -657,6 +657,55 @@ def test_solve_strategy_crash_is_contained(monkeypatch, autopwn_samples):
     assert any("crashed" in a["detail"] for a in res.attempts)
 
 
+def test_solve_no_flag_notes_name_every_attempted_strategy(monkeypatch, tmp_path):
+    import triage_web.autopwn as ap
+
+    monkeypatch.setenv("TRIAGE_RESULTS", str(tmp_path / "r.jsonl"))
+    # a path that never loads: recon() swallows the error into {"error": ...},
+    # so both forced strategies run (and crash) rather than classify() alone
+    # scoring just the one that applies to a malformed-but-readable ELF.
+    res = ap.solve(str(tmp_path / "does-not-exist"), only=["emulate", "ret2win"], budget_s=10)
+    assert not res.success
+    assert res.attempts
+    for att in res.attempts:
+        assert {"strategy", "ok", "detail", "confidence"} <= att.keys()
+    assert "emulate" in res.notes and "ret2win" in res.notes
+
+
+def test_solve_no_flag_notes_keep_a_short_finding_but_drop_a_long_one(monkeypatch, tmp_path, autopwn_samples):
+    """A short recovered finding (this project's real "win" symbol) survives
+    the 120-char notes slice; a pathologically long symbol/key repr can still
+    push it past that slice. keygen/z3 truncation-survival for long key reprs
+    is a known, accepted limitation OUT OF SCOPE for this phase — the
+    truncation constants themselves are deliberately left untouched."""
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_ret2win
+
+    monkeypatch.setenv("TRIAGE_RESULTS", str(tmp_path / "r.jsonl"))
+
+    monkeypatch.setattr(
+        strat_ret2win,
+        "solve_ret2win",
+        lambda *a, **k: strat_ret2win.Ret2WinResult(
+            ok=False, win="win", win_addr=0x401234, offset=40, reason="exploit ran but produced no flag"
+        ),
+    )
+    short_res = ap.solve(str(autopwn_samples["memflag"]), only=["ret2win"], budget_s=10)
+    assert "win=win@0x401234 offset=40" in short_res.notes
+    assert "win=win@0x401234 offset=40" in short_res.attempts[0]["detail"]
+
+    monkeypatch.setattr(
+        strat_ret2win,
+        "solve_ret2win",
+        lambda *a, **k: strat_ret2win.Ret2WinResult(
+            ok=False, win="w" * 200, win_addr=0x401234, offset=40, reason="exploit ran but produced no flag"
+        ),
+    )
+    long_res = ap.solve(str(autopwn_samples["memflag"]), only=["ret2win"], budget_s=10)
+    assert "offset=40" not in long_res.notes  # pushed past the 120-char slice
+    assert "offset=40" in long_res.attempts[0]["detail"]  # but preserved in full here
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 
 
@@ -688,6 +737,19 @@ def test_cli_reports_failure_detail(capsys, tmp_path):
     assert "no flag" in capsys.readouterr().out
 
 
+def test_cli_no_flag_lists_attempted_strategies(monkeypatch, capsys, tmp_path):
+    from triage_web.autopwn.__main__ import main
+
+    monkeypatch.setenv("TRIAGE_RESULTS", str(tmp_path / "r.jsonl"))
+    bad = tmp_path / "n.elf"
+    bad.write_bytes(b"\x7fELF" + b"\x00" * 40)
+    rc = main([str(bad), "--only", "emulate"])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "no flag" in out
+    assert "emulate" in out
+
+
 # ── API ──────────────────────────────────────────────────────────────
 
 
@@ -707,6 +769,40 @@ def test_api_autopwn_solve_forwards_strategy_and_budget(monkeypatch, autopwn_sam
     assert body["flag"] == "flag{routed}"
     assert captured["only"] == ["emulate", "angr"]
     assert captured["budget_s"] == 10.0  # clamped to the 10s floor
+
+
+def test_api_autopwn_no_flag_result_lists_attempts_and_notes(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+
+    def fake_solve(path, *, only, budget_s, flag_pattern, use_capa=False):
+        return ap.SolveResult(
+            path,
+            False,
+            None,
+            None,
+            3.4,
+            attempts=[
+                {
+                    "strategy": "ret2win",
+                    "ok": False,
+                    "seconds": 0.3,
+                    "detail": "win=win@0x401234 offset=72 (exploit ran but produced no flag)",
+                    "flag": None,
+                    "script": "",
+                    "confidence": "",
+                }
+            ],
+            notes="ret2win: win=win@0x401234 offset=72 (exploit ran but produced no flag)",
+        )
+
+    monkeypatch.setattr(ap, "solve", fake_solve)
+    c = TestClient(server.app)
+    c.post("/api/load", data={"path": str(autopwn_samples["memflag"])})
+    body = c.post("/api/autopwn").json()
+    assert body["success"] is False
+    assert body["attempts"][0]["strategy"] == "ret2win"
+    assert "offset=72" in body["attempts"][0]["detail"]
+    assert "ret2win" in body["notes"]
 
 
 # ── runner branch coverage (platform-mocked, no real processes) ───────
@@ -923,6 +1019,204 @@ def test_run_strategy_dispatches_each_backend(monkeypatch, autopwn_samples):
     assert ap._run_strategy("z3", p, None, 10).flag == "flag{z}"
     assert ap._run_strategy("brute", p, None, 10).flag == "flag{b}"
     assert not ap._run_strategy("bogus", p, None, 10).ok
+
+
+# ── registry: compose the recovered finding with the no-flag reason ─
+# (TRACE-02 — the real bug: a recovered win/key/struct finding was
+# silently discarded by `reason or <finding>` on every genuine no-flag run)
+
+
+def test_run_ret2win_composes_recovered_finding_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_ret2win
+
+    monkeypatch.setattr(
+        strat_ret2win,
+        "solve_ret2win",
+        lambda *a, **k: strat_ret2win.Ret2WinResult(
+            ok=False, win="win", win_addr=0x401234, offset=72, script="s", reason="exploit ran but produced no flag"
+        ),
+    )
+    att = ap._run_strategy("ret2win", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert att.flag is None
+    assert "win=win@0x401234 offset=72" in att.detail
+    assert "exploit ran but produced no flag" in att.detail
+    assert "win=win@0x401234 offset=72" in att.detail[:120]  # finding front-loaded
+
+
+def test_run_ret2win_falls_back_to_reason_when_nothing_recovered(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_ret2win
+
+    monkeypatch.setattr(
+        strat_ret2win,
+        "solve_ret2win",
+        lambda *a, **k: strat_ret2win.Ret2WinResult(ok=False, reason='no win function / system("/bin/sh") site found'),
+    )
+    att = ap._run_strategy("ret2win", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert att.detail == 'no win function / system("/bin/sh") site found'
+    assert "win=" not in att.detail and "offset=" not in att.detail  # nothing fabricated
+
+
+def test_run_ret2win_composes_win_without_offset_when_only_win_is_recovered(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_ret2win
+
+    monkeypatch.setattr(
+        strat_ret2win,
+        "solve_ret2win",
+        lambda *a, **k: strat_ret2win.Ret2WinResult(
+            ok=False, win="win", win_addr=0x401234, offset=None, reason="could not determine the overflow offset"
+        ),
+    )
+    att = ap._run_strategy("ret2win", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "win=win@0x401234" in att.detail
+    assert "offset=" not in att.detail
+    assert "could not determine the overflow offset" in att.detail
+
+
+def test_ret2win_real_fixture_recovers_a_short_front_loaded_finding(autopwn_samples):
+    import triage_web.autopwn as ap
+
+    att = ap._run_strategy("ret2win", str(autopwn_samples["ret2win"]), None, 60)
+    assert "win=win" in att.detail
+    assert "offset=40" in att.detail
+    assert "offset=40" in att.detail[:120]
+
+
+def test_run_keygen_composes_the_recovered_key_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_keygen
+
+    monkeypatch.setattr(
+        strat_keygen,
+        "solve_keygen",
+        lambda *a, **k: strat_keygen.KeygenResult(
+            ok=True,
+            key="deadbeef",
+            key_int=0xDEADBEEF,
+            win="win",
+            win_addr=0x401234,
+            flag=None,
+            reason="recovered the key but could not obtain the flag here — run the target with it",
+        ),
+    )
+    att = ap._run_strategy("keygen", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "key='deadbeef'" in att.detail
+    assert "recovered the key" in att.detail
+
+
+def test_run_z3_composes_the_recovered_key_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_z3
+
+    monkeypatch.setattr(
+        strat_z3,
+        "solve_z3",
+        lambda *a, **k: strat_z3.Z3Result(
+            ok=True,
+            key="c0de",
+            key_int=0xC0DE,
+            win="win",
+            flag=None,
+            script="s",
+            reason="recovered a satisfying key but no flag here — run the target with it",
+        ),
+    )
+    att = ap._run_strategy("z3", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "key='c0de'" in att.detail
+    assert "recovered a satisfying key" in att.detail
+
+
+def test_run_uaf_composes_the_recovered_struct_info_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_uaf
+
+    monkeypatch.setattr(
+        strat_uaf,
+        "solve_uaf",
+        lambda *a, **k: strat_uaf.UafResult(
+            ok=False,
+            flag_func=0x1234,
+            struct_size=0x40,
+            port=8080,
+            websocket=False,
+            route="fd",
+            script="s",
+            reason="generated the exploit and ran it against a local instance but got no flag back",
+        ),
+    )
+    att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "flag_func=0x1234" in att.detail
+    assert "route=fd" in att.detail
+    assert "generated the exploit" in att.detail
+
+
+def test_run_uaf_falls_back_to_reason_when_nothing_recovered(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_uaf
+
+    monkeypatch.setattr(
+        strat_uaf,
+        "solve_uaf",
+        lambda *a, **k: strat_uaf.UafResult(ok=False, reason="no free()+getenv() — not the dangling-callback shape"),
+    )
+    att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)
+    assert att.detail == "no free()+getenv() — not the dangling-callback shape"
+    assert "flag_func=" not in att.detail
+
+
+def test_run_uaf_composes_without_struct_size_when_only_flag_func_is_recovered(monkeypatch, autopwn_samples):
+    """struct_size is independently None-able even when flag_func is found
+    (_modal_malloc_size() can see no small-malloc call); formatting it
+    unconditionally with :#x would raise TypeError on this real shape."""
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_uaf
+
+    monkeypatch.setattr(
+        strat_uaf,
+        "solve_uaf",
+        lambda *a, **k: strat_uaf.UafResult(
+            ok=False,
+            flag_func=0x5000,
+            struct_size=None,
+            port=None,
+            websocket=False,
+            route="unknown",
+            reason="generated the exploit and ran it against a local instance but got no flag back",
+        ),
+    )
+    att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)  # must not raise
+    assert not att.ok
+    assert "flag_func=0x5000" in att.detail
+    assert "generated the exploit" in att.detail
+    assert "struct=" not in att.detail
+
+
+def test_run_brute_composes_the_recovered_prefix_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_brute
+
+    monkeypatch.setattr(
+        strat_brute,
+        "solve_brute",
+        lambda *a, **k: strat_brute.BruteResult(
+            ok=False,
+            key="abc",
+            tries=4096,
+            reason="recovered a likely prefix 'abc' but the checker never confirmed a full key",
+        ),
+    )
+    att = ap._run_strategy("brute", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "key='abc'" in att.detail
+    assert "recovered a likely prefix" in att.detail
 
 
 def test_solveresult_summary_both_ways():
