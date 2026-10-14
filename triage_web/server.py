@@ -1,5 +1,6 @@
 """FastAPI server application — routes, middleware, and entry point."""
 
+import functools
 import logging
 import os
 import platform
@@ -268,12 +269,18 @@ _WSL_ROUTED_ENGINES = {
 _IN_PROCESS_AUTOPWN_STRATEGIES = {"angr": ("angr", "ret2win"), "z3": ("z3",), "unicorn": ("emulate",)}
 
 
+@functools.cache
 def _wsl_env_status() -> wsl_env.WslEnvStatus:
+    """Memoized per process: detect() shells into WSL and imports up to five
+    packages there, which takes seconds and up to 15s cold. Caching it keeps
+    repeated Status-tab opens instant. Same unlocked per-process memo
+    approach runner._sh_probe already uses — a concurrent first call may
+    probe twice, and both results are valid, so no lock is needed."""
     return wsl_env.detect()
 
 
 @app.get("/api/status")
-def api_status():
+def api_status(refresh: bool = False):
     """Installed/available status of every optional engine the app can use.
 
     Engines imported only in this process get a native import check.
@@ -283,8 +290,10 @@ def api_status():
     carries availability ("native" | "wsl" | "missing") and installed
     (true unless missing). When angr, Z3 or Unicorn is available only via
     WSL, its detail names the autopwn strategy that still needs a native
-    install.
+    install. The WSL probe is memoized per process; ?refresh=1 re-probes.
     """
+    if refresh:
+        _wsl_env_status.cache_clear()
     import importlib.util
 
     from triage_web.loader import HAS_LIEF, HAS_PEFILE, HAS_PYELFTOOLS
