@@ -253,7 +253,19 @@ def health():
 # server's own process. Each maps to the WslEnvStatus field that says
 # whether that venv can import it. Engines imported only in this server's
 # process are deliberately absent, because a WSL copy of them is never used.
-_WSL_ROUTED_ENGINES = {"pwntools": "pwntools_ok", "triton": "triton_ok"}
+_WSL_ROUTED_ENGINES = {
+    "pwntools": "pwntools_ok",
+    "triton": "triton_ok",
+    "z3": "z3_ok",
+    "angr": "angr_ok",
+    "unicorn": "unicorn_ok",
+}
+
+# These engines are also imported in this server's own process by the named
+# autopwn strategies (autopwn/registry.py _run_angr/_run_z3/_run_emulate, and
+# strat_ret2win.py's own HAS_ANGR branch) — none of which a WSL-only copy
+# can serve.
+_IN_PROCESS_AUTOPWN_STRATEGIES = {"angr": ("angr", "ret2win"), "z3": ("z3",), "unicorn": ("emulate",)}
 
 
 def _wsl_env_status() -> wsl_env.WslEnvStatus:
@@ -269,7 +281,9 @@ def api_status():
     get a native check, then fall back to the WSL ~/pwn-venv probe, because
     on Windows runner.run_script() runs those scripts there. Each engine
     carries availability ("native" | "wsl" | "missing") and installed
-    (true unless missing).
+    (true unless missing). When angr, Z3 or Unicorn is available only via
+    WSL, its detail names the autopwn strategy that still needs a native
+    install.
     """
     import importlib.util
 
@@ -343,6 +357,12 @@ def api_status():
         else:
             e["availability"] = "missing"
         e["installed"] = e["availability"] != "missing"
+        if e["availability"] == "wsl" and e["id"] in _IN_PROCESS_AUTOPWN_STRATEGIES:
+            strategies = ", ".join(_IN_PROCESS_AUTOPWN_STRATEGIES[e["id"]])
+            e["detail"] = (
+                f"Solver scripts run via WSL; autopwn's {strategies} strategy(ies) "
+                "run in this server's Python and needs a native install."
+            )
 
     return {
         "engines": engines,
