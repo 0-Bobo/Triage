@@ -196,6 +196,21 @@ def test_index_subtab_switch_uses_a_non_ambiguous_name() -> None:
     assert 'onclick="sub(' not in resp.text
 
 
+def test_index_autopwn_no_flag_trace_renders_notes_on_top() -> None:
+    """Pin the already-shipped no-flag trace rendering against a future
+    refactor: each attempted strategy keeps its own escaped detail row, and
+    the terminal no-flag status line writes the notes summary on top of
+    those rows rather than replacing them. Real browser rendering is covered
+    by the phase's human check, not by this string-presence test.
+    """
+    resp = TestClient(server.app).get("/")
+    assert "esc((ev.detail || '').slice(0, 260))" in resp.text
+    assert "'No flag in ' + (d.seconds || 0) + 's. ' + esc(d.notes" in resp.text
+    assert "'Solved via <b>' + esc(d.strategy) + '</b> in ' + d.seconds" in resp.text
+    # the trace is cleared only once, at run start — never by the terminal event
+    assert resp.text.count("attemptsEl.innerHTML = ''") == 1
+
+
 def test_read_endpoint_requires_a_loaded_binary(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server._session, "loader", None)
     resp = TestClient(server.app).get("/api/functions")
