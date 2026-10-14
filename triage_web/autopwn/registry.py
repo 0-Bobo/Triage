@@ -242,6 +242,23 @@ def _score_brute(v: StaticView) -> tuple[int, str] | None:
 # pwntools) are only paid for when the strategy actually runs.
 
 
+def _detail(finding: str | None, reason: str) -> str:
+    """Compose a strategy's recovered finding with its no-flag reason.
+
+    A strategy can recover an exploit parameter (a win address, a key, a
+    struct size, ...) on a branch that still ends with ``ok=False`` and a
+    non-empty ``reason`` — e.g. the exploit ran but produced no flag. The
+    naive ``reason or finding`` always takes the reason side in exactly
+    that case, silently discarding the finding on every real no-flag run.
+    Keep the finding up front (so it survives a later truncation), append
+    the reason in parentheses, and fall back to the reason alone when
+    nothing was recovered so the string is never a fabricated finding.
+    """
+    if finding is None:
+        return reason
+    return f"{finding} ({reason})" if reason else finding
+
+
 def _run_smc(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_smc import solve_smc
 
@@ -272,26 +289,36 @@ def _run_keygen(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_keygen import solve_keygen
 
     r = solve_keygen(ctx.path)
-    detail = r.reason or f"key={r.key!r} → {r.win} @ {r.win_addr:#x}"
-    return Attempt("keygen", bool(r.flag), 0.0, detail, r.flag, "")
+    finding = f"key={r.key!r} → {r.win} @ {r.win_addr:#x}" if r.key is not None else None
+    return Attempt("keygen", bool(r.flag), 0.0, _detail(finding, r.reason), r.flag, "")
 
 
 def _run_uaf(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_uaf import solve_uaf
 
     r = solve_uaf(ctx.path, timeout=min(200.0, max(60.0, ctx.remaining)))
-    detail = r.reason or f"flag_func={r.flag_func:#x} struct={r.struct_size:#x} ws={r.websocket}"
+    finding = None
     if r.flag_func is not None:
-        detail += f" route={r.route}"
-    return Attempt("uaf", bool(r.flag), 0.0, detail, r.flag, r.script)
+        parts = [f"flag_func={r.flag_func:#x}"]
+        if r.struct_size is not None:  # independently None-able even when flag_func is found
+            parts.append(f"struct={r.struct_size:#x}")
+        parts.append(f"ws={r.websocket}")
+        parts.append(f"route={r.route}")
+        finding = " ".join(parts)
+    return Attempt("uaf", bool(r.flag), 0.0, _detail(finding, r.reason), r.flag, r.script)
 
 
 def _run_ret2win(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_ret2win import solve_ret2win
 
     r = solve_ret2win(ctx.path, timeout=min(90.0, max(20.0, ctx.remaining)))
-    detail = r.reason or f"win={r.win}@{r.win_addr:#x} offset={r.offset}"
-    return Attempt("ret2win", r.ok, 0.0, detail, r.flag, r.script)
+    parts = []
+    if r.win_addr is not None:
+        parts.append(f"win={r.win}@{r.win_addr:#x}")
+    if r.offset is not None:
+        parts.append(f"offset={r.offset}")
+    finding = " ".join(parts) or None
+    return Attempt("ret2win", r.ok, 0.0, _detail(finding, r.reason), r.flag, r.script)
 
 
 def _run_format_string(ctx: RunCtx) -> Attempt:
@@ -305,15 +332,16 @@ def _run_z3(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_z3 import solve_z3
 
     r = solve_z3(ctx.path)
-    detail = r.reason or f"key={r.key!r} → {r.win}"
-    return Attempt("z3", bool(r.flag), 0.0, detail, r.flag, r.script)
+    finding = f"key={r.key!r} → {r.win}" if r.key is not None else None
+    return Attempt("z3", bool(r.flag), 0.0, _detail(finding, r.reason), r.flag, r.script)
 
 
 def _run_brute(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_brute import solve_brute
 
     r = solve_brute(ctx.path, timeout=min(90.0, max(20.0, ctx.remaining)))
-    return Attempt("brute", bool(r.flag), 0.0, r.reason or f"key={r.key!r}", r.flag, "")
+    finding = f"key={r.key!r}" if r.key is not None else None
+    return Attempt("brute", bool(r.flag), 0.0, _detail(finding, r.reason), r.flag, "")
 
 
 STRATEGIES: list[Strategy] = [
