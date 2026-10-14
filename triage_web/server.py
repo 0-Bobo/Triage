@@ -27,6 +27,7 @@ from triage_web.analysis import (
     scan_gadgets,
     section_for_offset,
 )
+from triage_web.autopwn import wsl_env
 from triage_web.autopwn.runner import have_wsl
 from triage_web.config import DEFAULT_MNEMONIC_COLOR, VULN_SEVERITY_COLORS
 from triage_web.config import MNEMONIC_COLORS as MNEMONIC_COLOR_MAP
@@ -247,14 +248,28 @@ def health():
     }
 
 
+# Engines whose code runs inside generated scripts that runner.run_script()
+# executes (in WSL's ~/pwn-venv on Windows) — not just imported in this
+# server's own process. Each maps to the WslEnvStatus field that says
+# whether that venv can import it. Engines imported only in this server's
+# process are deliberately absent, because a WSL copy of them is never used.
+_WSL_ROUTED_ENGINES = {"pwntools": "pwntools_ok", "triton": "triton_ok"}
+
+
+def _wsl_env_status() -> wsl_env.WslEnvStatus:
+    return wsl_env.detect()
+
+
 @app.get("/api/status")
 def api_status():
     """Installed/available status of every optional engine the app can use.
 
-    Two different things get executed against two different Python
-    environments: /api/solver/execute now shells out through the same
-    runner.py WSL/sandbox route autopwn's live strategies use. ``installed``
-    here checks the former — the environment a "Run" click actually uses.
+    Engines imported only in this process get a native import check.
+    Engines whose code also runs in generated scripts (_WSL_ROUTED_ENGINES)
+    get a native check, then fall back to the WSL ~/pwn-venv probe, because
+    on Windows runner.run_script() runs those scripts there. Each engine
+    carries availability ("native" | "wsl" | "missing") and installed
+    (true unless missing).
     """
     import importlib.util
 
@@ -311,6 +326,24 @@ def api_status():
             "installed": find_spec_ok("pwn"),
         },
     ]
+
+    # Lazy, best-effort WSL fallback: only probe when some routed engine is
+    # missing natively, so a host with every routed engine installed locally
+    # never shells into WSL (and a host without WSL at all never tries).
+    wsl_ok: dict[str, bool] = {}
+    if any(not e["installed"] for e in engines if e["id"] in _WSL_ROUTED_ENGINES):
+        probe = _wsl_env_status()
+        wsl_ok = {eid: getattr(probe, field) for eid, field in _WSL_ROUTED_ENGINES.items()}
+
+    for e in engines:
+        if e["installed"]:
+            e["availability"] = "native"
+        elif wsl_ok.get(e["id"]):
+            e["availability"] = "wsl"
+        else:
+            e["availability"] = "missing"
+        e["installed"] = e["availability"] != "missing"
+
     return {
         "engines": engines,
         "runtime": {"platform": platform.system(), "wsl": have_wsl() if platform.system() == "Windows" else None},
