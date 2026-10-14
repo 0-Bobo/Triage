@@ -1076,6 +1076,31 @@ def test_api_autopwn_stream_emits_sse_progress(autopwn_samples):
     assert events[-1]["result"]["flag"] == "flag{MEMbuilt_42}"
 
 
+def test_api_autopwn_stream_no_flag_carries_the_per_strategy_trace(monkeypatch, tmp_path, autopwn_samples):
+    """Drive the real orchestrator (no monkeypatching of solve) through a
+    genuine no-flag run and confirm the SSE stream carries the per-strategy
+    trace plus a populated notes string on the terminal event (TRACE-01)."""
+    monkeypatch.setenv("TRIAGE_RESULTS", str(tmp_path / "r.jsonl"))
+    c = TestClient(server.app)
+    assert c.post("/api/load", data={"path": str(autopwn_samples["memflag"])}).status_code == 200
+
+    with c.stream("GET", "/api/autopwn/stream", params={"strategies": "ret2win", "budget_s": 40}) as r:
+        assert r.status_code == 200
+        events = [json.loads(line[len("data: ") :]) for line in r.iter_lines() if line.startswith("data: ")]
+
+    done_events = [e for e in events if e["kind"] == "strategy_done" and e["name"] == "ret2win"]
+    assert len(done_events) == 1
+    assert done_events[0]["ok"] is False
+    assert done_events[0]["detail"]
+
+    terminal = events[-1]
+    assert terminal["kind"] == "done"
+    result = terminal["result"]
+    assert result["success"] is False
+    assert result["attempts"]
+    assert result["notes"]
+
+
 def test_api_autopwn_stream_reports_an_orchestrator_crash(monkeypatch, autopwn_samples):
     c = TestClient(server.app)
     assert c.post("/api/load", data={"path": str(autopwn_samples["memflag"])}).status_code == 200
