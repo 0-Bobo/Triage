@@ -379,6 +379,51 @@ def test_angr_reports_a_reason_when_it_cannot_load(tmp_path):
     assert not r.ok and r.reason
 
 
+@pytest.mark.slow
+def test_angr_solves_an_argv_only_overflow_via_the_symbolic_argv_fallback(crackme_path):
+    # Regression: elf64_crackme's overflow only runs via argv (strcpy(buf,
+    # argv[1])), not stdin. _run_angr used to only ever try solve_with_angr's
+    # stdin-only default, so it never reached the vulnerable path at all —
+    # even though solve_with_angr already supported use_argv=True.
+    import triage_web.autopwn as ap
+
+    att = ap._run_strategy("angr", str(crackme_path), None, 90)
+    assert att.ok and att.flag == "FLAG{ok}"
+    assert "via symbolic argv" in att.detail
+
+
+def test_run_angr_tries_symbolic_argv_only_after_stdin_fails(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_angr
+
+    calls = []
+
+    def fake(_path, *, use_argv=False, **_k):
+        calls.append(use_argv)
+        if use_argv:
+            return strat_angr.AngrResult(True, stdin=b"X", flag="flag{argv}", stdout=b"ok\n")
+        return strat_angr.AngrResult(False, reason="no success state reached")
+
+    monkeypatch.setattr(strat_angr, "solve_with_angr", fake)
+    att = ap._run_strategy("angr", str(autopwn_samples["memflag"]), None, 10)
+    assert calls == [False, True]  # stdin tried first, argv only as a fallback
+    assert att.ok and att.flag == "flag{argv}"
+    assert "via symbolic argv" in att.detail
+
+
+def test_run_angr_reports_both_attempts_failed(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_angr
+
+    monkeypatch.setattr(
+        strat_angr, "solve_with_angr", lambda *a, **k: strat_angr.AngrResult(False, reason="no success state")
+    )
+    att = ap._run_strategy("angr", str(autopwn_samples["memflag"]), None, 10)
+    assert not att.ok
+    assert "no success state" in att.detail
+    assert "also tried symbolic argv" in att.detail
+
+
 # ── keygen strategy ──────────────────────────────────────────────────
 
 

@@ -291,8 +291,24 @@ def _run_emulate(ctx: RunCtx) -> Attempt:
 def _run_angr(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_angr import solve_with_angr
 
-    r = solve_with_angr(ctx.path, flag_pattern=ctx.flag_pattern, step_budget=int(max(4000, ctx.remaining * 300)))
+    budget = int(max(4000, ctx.remaining * 300))
+    r = solve_with_angr(ctx.path, flag_pattern=ctx.flag_pattern, step_budget=budget)
+    tried_argv = False
+    if not r.ok:
+        # A target whose overflow/check only runs when argc > 1 (argv-driven,
+        # not stdin) never reaches the interesting code under a stdin-only
+        # symbolic state. angr can explore a symbolic argv directly (unlike
+        # pwntools' concrete process(), which can't carry a NUL byte in a
+        # single argv element) — cheap enough to just try as a fallback.
+        r2 = solve_with_angr(ctx.path, flag_pattern=ctx.flag_pattern, step_budget=budget, use_argv=True)
+        tried_argv = True
+        if r2.ok:
+            r = r2
     detail = r.reason or f"input={r.stdin!r} stdout={r.stdout[:160]!r}"
+    if tried_argv and not r.ok:
+        detail += " (also tried symbolic argv, no success)"
+    elif tried_argv and r.ok:
+        detail = f"[via symbolic argv] {detail}"
     return Attempt("angr", r.ok, 0.0, detail, r.flag)
 
 
