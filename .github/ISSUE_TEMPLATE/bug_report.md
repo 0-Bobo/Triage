@@ -5,7 +5,7 @@ title: ""
 labels: bug
 ---
 
-<!-- Security issue? Don't file it here — see SECURITY.md. -->
+<!-- Security issue? Don't file it here, see SECURITY.md. -->
 
 ## What happened
 

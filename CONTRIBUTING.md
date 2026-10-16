@@ -6,7 +6,7 @@
 
 ```bash
 make dev        # installs uv (if missing), syncs deps + dev tools, installs pre-commit hooks
-make check      # ruff lint + pytest — verify the setup
+make check      # ruff lint + pytest, verify the setup
 ```
 
 `make dev` runs `uv sync --all-extras --dev`, which pulls the heavy optional
@@ -33,10 +33,10 @@ uv sync --extra analysis --dev      # + symbolic/CAPA backends
 
 ## Layout
 
-- `triage_web/` — the FastAPI package (`main.py` / `python -m triage_web`).
+- `triage_web/`: the FastAPI package (`main.py` / `python -m triage_web`).
   This is the package that ships and is covered by tests.
-- `tests/` — pytest suite (`test_engine.py` locks decompiler/engine behaviour).
-- `samples/` — test binaries; excluded from lint.
+- `tests/`: pytest suite (`test_engine.py` locks decompiler/engine behaviour).
+- `samples/`: test binaries; excluded from lint.
 
 ## Auto-solver (`autopwn`) conventions
 

@@ -133,30 +133,30 @@ def test_index_wires_hash_based_panel_routing() -> None:
 
 def test_index_escapes_the_imports_library_cell() -> None:
     resp = TestClient(server.app).get("/")
-    assert "'</td><td style=\"color:var(--text-dim)\">'+esc(i.library||'')+'</td>" in resp.text
-    assert "'</td><td style=\"color:var(--text-dim)\">'+(i.library||'')+'</td>" not in resp.text
+    assert "'</td><td style=\"color:var(--text-dim)\">' + esc(i.library || '') + '</td>" in resp.text
+    assert "'</td><td style=\"color:var(--text-dim)\">' + (i.library || '') + '</td>" not in resp.text
 
 
 def test_index_escapes_the_disasm_mnemonic_cell() -> None:
     resp = TestClient(server.app).get("/")
-    assert "'<td class=\"mnem\" style=\"color:'+i.color+'\">'+esc(i.mnemonic)+'</td>" in resp.text
-    assert "'<td class=\"mnem\" style=\"color:'+i.color+'\">'+i.mnemonic+'</td>" not in resp.text
+    assert "'<td class=\"mnem\" style=\"color:' + i.color + '\">' + esc(i.mnemonic) + '</td>" in resp.text
+    assert "'<td class=\"mnem\" style=\"color:' + i.color + '\">' + i.mnemonic + '</td>" not in resp.text
 
 
 def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
     resp = TestClient(server.app).get("/")
     assert "function escAttr(s) {" in resp.text
     # Untrusted names land in a data-* attribute (escAttr), read back via
-    # dataset in the handler — never string-concatenated into the inline
+    # dataset in the handler, never string-concatenated into the inline
     # handler's JS-string literal.
-    win_link = 'data-name="\'+escAttr(w.name)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
-    ovf_link = 'data-name="\'+escAttr(s.function)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
-    vuln_link = 'data-name="\'+escAttr(f.name)+\'" onclick="showCodeWithSearch(this.dataset.name);return false"'
+    win_link = 'data-name="\' + escAttr(w.name) + \'" onclick="showCodeWithSearch(this.dataset.name);return false"'
+    ovf_link = 'data-name="\' + escAttr(s.function) + \'" onclick="showCodeWithSearch(this.dataset.name);return false"'
+    vuln_link = 'data-name="\' + escAttr(f.name) + \'" onclick="showCodeWithSearch(this.dataset.name);return false"'
     assert win_link in resp.text
     assert ovf_link in resp.text
     assert vuln_link in resp.text
-    # The old vulnerable pattern — the untrusted name spliced straight into
-    # the quoted inline-handler argument — must be gone from all 3 sites.
+    # The old vulnerable pattern (the untrusted name spliced straight into
+    # the quoted inline-handler argument) must be gone from all 3 sites.
     assert 'onclick="showCodeWithSearch(\\\'"+esc(w.name)+"\\\');return false"' not in resp.text
     assert 'onclick="showCodeWithSearch(\\\'"+esc(s.function)+"\\\');return false"' not in resp.text
     assert 'onclick="showCodeWithSearch(\\\'"+esc(f.name)+"\\\');return false"' not in resp.text
@@ -164,12 +164,12 @@ def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
 
 def test_index_response_ok_guard_covers_every_load_fetcher() -> None:
     resp = TestClient(server.app).get("/")
-    guard = "if(!r.ok){const e=await r.json();throw new Error(e.detail||r.statusText);}"
-    # 3 pre-existing sites (capa, solver generate, solver execute) + the 10
-    # fetchers this test locks: imports, strings, sections/memory-map, vulns,
-    # code-functions, vuln-hints, ROP scan, ROP gadget search, xrefs lookup,
-    # xrefs build.
-    assert resp.text.count(guard) == 13
+    guard = "if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }"
+    # 4 pre-existing sites (capa, solver generate, solver execute, one more
+    # sharing the same guard) + the 10 fetchers this test locks: imports,
+    # strings, sections/memory-map, vulns, code-functions, vuln-hints, ROP
+    # scan, ROP gadget search, xrefs lookup, xrefs build.
+    assert resp.text.count(guard) == 14
 
 
 def test_index_search_inputs_filter_client_side_without_a_fetch() -> None:

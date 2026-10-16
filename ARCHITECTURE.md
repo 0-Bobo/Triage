@@ -26,17 +26,17 @@ The orientation map for picking the repo up cold; read it after the README. For 
 main.py                     thin launcher -> triage_web.server:main
 triage_web/                  the package (see §3)
   index.html                 the whole SPA: markup + inline <style> + inline JS + embedded
-                                base64 Geist Sans/Mono @font-face data (~1962 lines), no build step
+                                base64 Geist Sans/Mono @font-face data (~3330 lines), no build step
   frontend.py                reads index.html once at import into HTML_PAGE
   server.py                  FastAPI app: ~40 routes, upload handling, entry point
   analysis.py                pure domain helpers over BinaryLoader (no FastAPI)
-  loader.py                  BinaryLoader — ELF/PE parse, protections, strings, hashes, arch detection
+  loader.py                  BinaryLoader: ELF/PE parse, protections, strings, hashes, arch detection
   engine.py                  Disassembler, ROP scanner, xref DB, basic blocks (Capstone)
   rop.py, xref.py            extracted from engine.py during a modular refactor
   knowledge.py               static tables: vuln patterns, crypto/packer sigs, ATT&CK
   solvers.py                 generates + executes standalone exploit scripts (pwntools/z3/angr templates)
   config.py                  colour palette + visual constants
-  cfg.py pcode.py            EXPERIMENTAL Ghidra-style p-code decompiler pipeline —
+  cfg.py pcode.py            EXPERIMENTAL Ghidra-style p-code decompiler pipeline,
   ssa_engine.py emit_c.py      reachable from no HTTP route, omitted from coverage,
   decompile_actions.py         only entered via engine.decompile_with_pcode (unused). See §4.
   autopwn/                   the accelerator (see §5)
@@ -152,7 +152,7 @@ capa_scan.capabilities(path)  ----->  registry.build_view -> StaticView
 | `emulate` | small self-contained check function | Unicorn function run + memory scan. |
 | `z3` | short arithmetic chain (`add/sub/xor/mul/shl/shr/rol/ror/neg/not`) before a constant compare | Models the chain, solves with z3 (`keygate` -> `0xdeadbeef`). |
 | `ret2win` | BOF sink + a win function | Symbolic offset + pwntools payload + run. |
-| `uaf` | dangling-callback pattern | Recon classifies how the planted callback's `arg1` is consumed — session `id` / socket `fd` / `ptr` (needs a leak, bails) — and routes the exploit accordingly. |
+| `uaf` | dangling-callback pattern | Recon classifies how the planted callback's `arg1` is consumed (session `id` / socket `fd` / `ptr`; needs a leak, bails) and routes the exploit accordingly. |
 | `format_string` | `%p`-style user-controlled format | `%p` probe / leak script. |
 | `angr` | fallback: symbolic stdin/argv -> success state | |
 | `brute` | runnable checker + feedback oracle | char-by-char, then a short digit-keyspace, bounded by time + a 4000-run ceiling. |
@@ -189,7 +189,7 @@ capa_scan.capabilities(path)  ----->  registry.build_view -> StaticView
 | `make check` | `ruff check` + `ruff format --check` + pytest |
 | `make coverage` | pytest with term/html/xml coverage, `--cov=triage_web` |
 | `make coverage-strat` | report-only line coverage of the `omit`-ed `strat_*` / `capa_scan` layer (no gate) |
-| `make deps-canary` | solver suite against **unpinned latest** angr/unicorn/pwntools/capstone — catch upstream breakage. Weekly in CI (`schedule:`) + on demand; never gates a PR. |
+| `make deps-canary` | solver suite against **unpinned latest** angr/unicorn/pwntools/capstone, to catch upstream breakage. Weekly in CI (`schedule:`) + on demand; never gates a PR. |
 | `make autopwn BIN=path` | `python -m triage_web.autopwn` on one binary |
 
 - **Package manager:** `uv`. `uv.lock` is committed; CI installs `--frozen`.
@@ -201,9 +201,9 @@ capa_scan.capabilities(path)  ----->  registry.build_view -> StaticView
 - **pre-commit:** ruff + ruff-format + whitespace/EOF/yaml; a `pre-push` hook
   runs the coverage gate.
 - **CI** (`.github/workflows/ci.yml`): push/PR on `master` + `workflow_dispatch`
-  + weekly `schedule:`. `test` job — matrix Python 3.12 & 3.13,
+  + weekly `schedule:`. `test` job: matrix Python 3.12 & 3.13,
   `uv sync --all-extras --dev --frozen` -> `make lint` -> `make coverage` ->
-  `pip-audit` (non-blocking) -> Codecov. `deps-canary` job — schedule /
+  `pip-audit` (non-blocking) -> Codecov. `deps-canary` job: schedule /
   dispatch only, `continue-on-error`, runs `make deps-canary`.
 - **Commits:** conventional (`feat: fix: docs: refactor: test: chore:`).
 

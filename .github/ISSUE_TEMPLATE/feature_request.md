@@ -7,7 +7,7 @@ labels: enhancement
 
 ## What's missing
 
-<!-- The gap, not the solution yet — what can't you currently do? -->
+<!-- The gap, not the solution yet: what can't you currently do? -->
 
 ## Proposed approach
 
@@ -16,7 +16,7 @@ labels: enhancement
 ## Scope check
 
 - [ ] This fits the existing "recon + first-move accelerator" scope (see
-      `ARCHITECTURE.md` §5) — `autopwn` surfaces/ranks/recovers parameters,
+      `ARCHITECTURE.md` §5): `autopwn` surfaces/ranks/recovers parameters,
       it doesn't claim to "solve end to end."
 - [ ] This doesn't require a build step or bundler for `index.html`/`style.css`.
 - [ ] (If it's a new `autopwn` strategy) it can ship with a golden-output
