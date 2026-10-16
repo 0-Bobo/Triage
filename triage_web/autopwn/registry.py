@@ -274,7 +274,8 @@ def _run_emulate(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_emulate import emulate_for_flag
 
     r = emulate_for_flag(ctx.path, flag_pattern=ctx.flag_pattern)
-    return Attempt("emulate", r.ok, 0.0, r.reason or f"stdout={r.stdout[:120]!r}", r.flag)
+    finding = f"stdout={r.stdout[:120]!r}" if r.stdout else None
+    return Attempt("emulate", r.ok, 0.0, _detail(finding, r.reason), r.flag)
 
 
 def _run_angr(ctx: RunCtx) -> Attempt:
@@ -325,7 +326,8 @@ def _run_format_string(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_fmt import solve_format_string
 
     r = solve_format_string(ctx.path, timeout=min(60.0, max(15.0, ctx.remaining)))
-    return Attempt("format_string", r.ok, 0.0, r.reason or f"leak={r.leak[:160]!r}", r.flag, r.script)
+    finding = f"leak={r.leak[:160]!r}" if r.leak else None
+    return Attempt("format_string", r.ok, 0.0, _detail(finding, r.reason), r.flag, r.script)
 
 
 def _run_z3(ctx: RunCtx) -> Attempt:
