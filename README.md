@@ -130,6 +130,50 @@ capa_scan.capabilities  ---------> registry.build_view -> StaticView
 | `angr` | fallback | a symbolic stdin/argv that reaches the success state |
 | `brute` | runnable checker with a pass/fail oracle | the key, char by char or over a small keyspace |
 
+## Running the heavy backends via WSL
+
+On native Windows, `angr`/`z3`/`unicorn` are awkward to install and every
+generated exploit script needs a real Linux process (`pwntools`'
+`process()`/`gdb.debug()` don't work on Windows at all). Triage handles this
+by routing to WSL automatically instead of requiring you to run the whole
+app from there.
+
+**One-time setup**, from a WSL shell:
+
+```bash
+bash /mnt/c/path/to/Triage/wsl/setup_pwn_env.sh
+```
+
+This provisions `~/pwn-venv` (a Linux-native virtualenv) with
+`requirements-web.txt` and `pwntools` + `triton-library`. It's idempotent -
+safe to re-run any time, and it only touches what's actually missing. If
+`python3-venv` isn't installed it prints the exact `apt` command and stops
+there rather than guessing. You can also trigger it from Windows:
+
+```bash
+python -m triage_web.autopwn.wsl_env --setup
+```
+
+**What gets routed where** - the Status panel (`?` in the sidebar) shows
+each engine as `native`, `wsl`, or `missing`:
+
+| Engine | Native install | WSL-only (`~/pwn-venv`) |
+|---|---|---|
+| `pwntools`, `triton` | n/a on Windows | used for every generated script `runner.run_script()` runs |
+| `angr`, `z3`, `unicorn` | needed for autopwn's own `ret2win`/`z3`/`emulate` strategies, which run **in this server's process** | only covers the Solver-panel scripts you export and run separately; a WSL-only install does **not** make autopwn's in-process strategies work |
+
+That split exists because `setup_pwn_env.sh` only installs `pwntools` +
+`triton-library` - it does not install `angr`/`z3`/`unicorn` into the venv.
+If you want those available via WSL too (for exported solver scripts, not
+for autopwn itself), `pip install` them into `~/pwn-venv` yourself. For
+autopwn's `angr`/`z3`/`emulate` strategies to run at all, those three need a
+**native** Windows install (`pip install angr z3-solver unicorn`); there's
+no WSL fallback for code that runs inside this server's own process.
+
+ELF targets and every generated script are additionally sandboxed (`bwrap`
+if available, else `unshare`); see `ARCHITECTURE.md` for the isolation
+details and `TRIAGE_SANDBOX` override.
+
 ## Layout
 
 ```

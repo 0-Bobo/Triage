@@ -80,10 +80,15 @@ cython_debug/
 # user notes vault (not part of the tool)
 /Writeups/
 
-# private working notes / analysis — not for the public repo
+# private working notes / analysis, not for the public repo
 /docs/
 /apps/
-/wsl/
+/wsl/*
+# ...except the provisioning script triage_web/autopwn/wsl_env.py actually
+# depends on at runtime (_SETUP_SCRIPT) - that one ships. (A directory-level
+# /wsl/ exclude stops git from even looking inside it, so the negation below
+# needs the dir unignored one level up via the /wsl/* glob instead.)
+!/wsl/setup_pwn_env.sh
 /.planning/
 /.claude/
 
