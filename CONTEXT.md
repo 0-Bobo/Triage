@@ -22,10 +22,10 @@ either a flag or a runnable exploit skeleton with real recovered parameters.
 Two halves, one process:
 
 1. **Static analysis** (`loader.py`, `engine.py`, `analysis.py`, `rop.py`,
-   `xref.py`) — pure, synchronous, no FastAPI imports. Given bytes, produce
+   `xref.py`): pure, synchronous, no FastAPI imports. Given bytes, produce
    facts: sections, protections, disassembly, gadgets, xrefs. This is the
    layer every panel in the UI ultimately calls into.
-2. **`autopwn`** (`triage_web/autopwn/`) — a strategy registry on top of
+2. **`autopwn`** (`triage_web/autopwn/`): a strategy registry on top of
    layer 1. `classify()` turns the static picture into a `StaticView`;
    `registry.plan()` ranks strategies against it; each strategy's `run()`
    either produces a flag or a `SolveResult` describing what it recovered.
@@ -35,20 +35,20 @@ Two halves, one process:
 
 `server.py` is the seam between both and the browser: ~40 routes, no
 analysis logic of its own, one global `Session` holding "the currently
-loaded binary." `index.html` + `style.css` are the frontend — no build
+loaded binary." `index.html` + `style.css` are the frontend: no build
 step, no bundler, no framework; every panel is a `fetch()` to one of those
 routes rendered into a DOM string.
 
 ## Reading order for a newcomer
 
-1. `README.md` — what it does, quick start, the `autopwn` strategy table.
-2. This file — the map you're reading.
-3. `ARCHITECTURE.md` — directory-by-directory detail, the request-flow
+1. `README.md`: what it does, quick start, the `autopwn` strategy table.
+2. This file: the map you're reading.
+3. `ARCHITECTURE.md`: directory-by-directory detail, the request-flow
    diagram, the coverage contract, known gotchas. Read this before touching
    `server.py` or `autopwn/`.
-4. `CONTRIBUTING.md` — PR expectations, the golden-output-test rule for new
+4. `CONTRIBUTING.md`: PR expectations, the golden-output-test rule for new
    `autopwn` strategies.
-5. `SECURITY.md` — the threat model. Read this before ever running the
+5. `SECURITY.md`: the threat model. Read this before ever running the
    server anywhere but your own machine.
 
 ## Where to make a change
@@ -56,30 +56,30 @@ routes rendered into a DOM string.
 | You want to... | Start here |
 |---|---|
 | Fix/extend static analysis (new protection check, new string pattern) | `triage_web/analysis.py`, `triage_web/loader.py` |
-| Add a disassembly/decompiler feature | `triage_web/engine.py` (shipped decompiler); `triage_web/pcode.py` + friends is the **experimental, unwired** p-code pipeline — see `ARCHITECTURE.md` §4 before touching it |
+| Add a disassembly/decompiler feature | `triage_web/engine.py` (shipped decompiler); `triage_web/pcode.py` + friends is the **experimental, unwired** p-code pipeline, see `ARCHITECTURE.md` §4 before touching it |
 | Add a new `autopwn` strategy | `triage_web/autopwn/strat_*.py` for the pattern, `registry.py` for the scoring hook, `CONTRIBUTING.md` for the golden-test requirement |
-| Add/fix an exploit-script generator | `triage_web/solvers.py` — one `_foo(path, bits, arch, ...)` function per generator, registered in `SOLVER_GENERATORS` |
-| Add an HTTP route | `triage_web/server.py` — keep it a thin seam; put logic in `analysis.py`/`loader.py`/`engine.py` and call it from the route |
-| Change the UI | `triage_web/index.html` (markup/JS) + `triage_web/style.css` (styles, design tokens in `:root`) — no build step, so edits are live on refresh |
+| Add/fix an exploit-script generator | `triage_web/solvers.py`: one `_foo(path, bits, arch, ...)` function per generator, registered in `SOLVER_GENERATORS` |
+| Add an HTTP route | `triage_web/server.py`: keep it a thin seam; put logic in `analysis.py`/`loader.py`/`engine.py` and call it from the route |
+| Change the UI | `triage_web/index.html` (markup/JS) + `triage_web/style.css` (styles, design tokens in `:root`), no build step, so edits are live on refresh |
 | Change fonts/assets | `triage_web/static/` (served via a `StaticFiles` mount) |
 
 ## What's safe to touch vs. load-bearing
 
 - **Safe, low-blast-radius:** `triage_web/solvers.py` generators (each is
-  independent), `triage_web/autopwn/strat_*.py` (same — strategies are
+  independent), `triage_web/autopwn/strat_*.py` (same: strategies are
   deliberately decoupled, see `registry.py`), frontend copy/layout inside
   an existing panel.
 - **Load-bearing, change with care + tests:** `Session` in `server.py` (one
-  shared mutable object, now lock-guarded — see `Session._lock`),
+  shared mutable object, now lock-guarded, see `Session._lock`),
   `_safe_staged_upload_path`/`_confirm_non_loopback_host` (the two places
   this app's "unauthenticated by design" threat model is actually
   enforced), anything in `triage_web/autopwn/runner.py` (the sandboxing
   layer every strategy and generated script runs through).
 - **Deliberately untouched:** `triage_web/pcode.py`, `cfg.py`, `ssa_engine.py`,
-  `emit_c.py`, `decompile_actions.py` — a complete, working, but unwired
+  `emit_c.py`, `decompile_actions.py`: a complete, working, but unwired
   Ghidra-style decompiler pipeline (real SSA, dominance, structuring). It's
   excluded from the coverage gate on purpose. Don't delete it reflexively
-  and don't wire it up casually — see `ARCHITECTURE.md` §4 for the actual
+  and don't wire it up casually, see `ARCHITECTURE.md` §4 for the actual
   trade-off.
 
 ## The non-negotiable contract
@@ -88,6 +88,6 @@ routes rendered into a DOM string.
 surface (everything except the experimental decompiler and the `strat_*`
 strategy files, which have their own opt-in `make coverage-strat` report)
 stays at `fail_under = 100`. A new `autopwn` strategy or solver generator
-ships with a test in the same commit — see `CONTRIBUTING.md`. The frontend
+ships with a test in the same commit, see `CONTRIBUTING.md`. The frontend
 stays two static files with no build step; if a change needs a bundler,
 it's the wrong change for this repo.

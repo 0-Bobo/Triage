@@ -7,39 +7,39 @@ release.
 ## [Unreleased]
 
 ### Added
-- **`CONTEXT.md`** — newcomer-facing orientation map (what Triage is, the
+- **`CONTEXT.md`**: newcomer-facing orientation map (what Triage is, the
   static-analysis/`autopwn` mental model, reading order, a "where to make
   a change" table, what's safe vs. load-bearing).
-- **`SECURITY.md`** — explicit threat model (unauthenticated local file
+- **`SECURITY.md`**: explicit threat model (unauthenticated local file
   read + unauthenticated arbitrary code execution, by design, for a
   single-user local tool) and a private disclosure channel.
-- **`.github/ISSUE_TEMPLATE/`** — bug report + feature request templates.
-- **`triage_web/style.css`** — CSS split out of `index.html` into its own
+- **`.github/ISSUE_TEMPLATE/`**: bug report + feature request templates.
+- **`triage_web/style.css`**: CSS split out of `index.html` into its own
   file; the five embedded base64 Geist Sans/Mono weights became real
   `.woff2` files under `triage_web/static/fonts/` (served via a
   `StaticFiles` mount), same same-origin guarantee, far smaller and more
   readable.
-- **`--i-understand-the-network-risk`** — required alongside any
+- **`--i-understand-the-network-risk`**: required alongside any
   non-loopback `--host`; the server now refuses to start without it
   instead of just printing a warning.
-- **`ARCHITECTURE.md`** — cold-start orientation map: the web request flow, the
+- **`ARCHITECTURE.md`**, cold-start orientation map: the web request flow, the
   unwired p-code decompiler pipeline, the `autopwn`
   recon → classify → registry → strategy flow, the strategy catalog, the
   coverage contract, tooling, and known gotchas.
-- **`Attempt.confidence`** (`solved` / `likely` / `guess`) — a strategy grades
+- **`Attempt.confidence`** (`solved` / `likely` / `guess`), a strategy grades
   its own flag; the orchestrator defaults it to `solved` when a strategy
   returns a flag ungraded. Surfaced in `SolveResult.summary()`, the CLI, the
   SSE `strategy_done` event, and the telemetry row.
 - **`strategy_start`** SSE event now carries `budget_remaining` (seconds), so
   the time spend is visible while a solve runs.
-- **`solve(context=)`** (falls back to `$TRIAGE_CTX`) — written to the
+- **`solve(context=)`** (falls back to `$TRIAGE_CTX`), written to the
   `~/.triage/results.jsonl` telemetry row.
-- **`make coverage-strat`** — report-only line coverage of the `omit`-ed
+- **`make coverage-strat`**: report-only line coverage of the `omit`-ed
   `strat_*` / `capa_scan` layer, no gate.
-- **Weekly `deps-canary` CI job** — the solver suite against unpinned-latest
+- **Weekly `deps-canary` CI job**: the solver suite against unpinned-latest
   `angr` / `unicorn` / `pwntools` / `capstone`; non-gating, catches upstream
   backend breakage on a schedule.
-- **`tests/test_golden_recon.py`** — locks the deterministic `recon()` shape
+- **`tests/test_golden_recon.py`**: locks the deterministic `recon()` shape
   (format / arch / protections / ranked plan) for five sample fixtures in the
   fast test path.
 
@@ -56,13 +56,13 @@ release.
   disasm-table mnemonic cell, and doc drift (README port, stale test
   counts).
 - **`solve_smc()` leaked a full copy of the target binary into the system
-  temp directory** on every run that didn't actually decode anything —
+  temp directory** on every run that didn't actually decode anything;
   every binary classified as an SMC candidate that turned out not to be
   one left a permanent `triage_smc_*` file behind.
 - **A stale `uv.lock` "desktop" extra** (PyQt6 and friends, left over from
   a dependency group that no longer exists in `pyproject.toml`) forced an
   unnecessary full re-resolution on `uv run`.
-- **`starlette.testclient.TestClient` only worked by accident** — `httpx`
+- **`starlette.testclient.TestClient` only worked by accident**: `httpx`
   reached the environment transitively via an optional IDA-plugin
   dependency chain, not as a declared test dependency; a fresh environment
   without that chain hit a hard `RuntimeError` at test collection. `httpx2`
@@ -74,7 +74,7 @@ release.
   single-tone section-label glyphs.
 - 24 findings from an earlier five-lens code review (2 Critical XSS, 3
   High, 6 Medium, 13 Low) across the web surface.
-- **CI runs green on Linux** — the suite had only ever run on Windows. The first
+- **CI runs green on Linux**: the suite had only ever run on Windows. The first
   real CI run surfaced: `ruff format --check` reformatting Markdown code blocks;
   the sandbox picking `unshare` on hosts that block unprivileged user
   namespaces (`_sh_probe` now runs each tool for real and keeps it only on exit
@@ -83,7 +83,7 @@ release.
   reachable on Windows, now covered by direct tests. `make coverage` reports
   `term-missing`.
 - **`solve()` crashed on an unloadable / missing binary** instead of returning a
-  result — `recon()` is guarded, but the next line re-derived the plan with an
+  result; `recon()` is guarded, but the next line re-derived the plan with an
   unguarded second `classify()` call that re-opened the file and raised straight
   out of `solve()`. It now reuses the plan `recon()` already computed.
   Regression test added.
@@ -93,22 +93,22 @@ release.
   glyph so the two nav entries are distinguishable.
 
 ### Changed
-- **`server.py`** — extracted `_size_to_next_function()`; two byte-identical
+- **`server.py`**: extracted `_size_to_next_function()`; two byte-identical
   "size to next function boundary" blocks now call it.
-- **`index.html`** — removed a dead `.tab-bar` / `.tab` CSS block + its inert
+- **`index.html`**: removed a dead `.tab-bar` / `.tab` CSS block + its inert
   click handler + an empty init IIFE. No visual change.
-- **`CONTRIBUTING.md`** — `autopwn` is documented as a *recon + first-move
+- **`CONTRIBUTING.md`**: `autopwn` is documented as a *recon + first-move
   accelerator*: a strategy *surfaces / ranks / recovers parameters*, it does not
   "solve end to end". A `strat_*` file joins the coverage `omit` list only
   alongside a golden-output test for it.
 
-## [2.5.0] — Strategy registry, capa-driven selection, live solver feedback
+## [2.5.0] - Strategy registry, capa-driven selection, live solver feedback
 
 ### Added
 - **Declarative strategy registry** (`triage_web/autopwn/registry.py`). Every
   solver strategy is one `Strategy(name, score(view), run(ctx))`: `score` turns
   the static `StaticView` into `(priority, rationale)` or `None`; `run` invokes
-  it. `classify()` and the orchestrator iterate the list — adding a strategy is
+  it. `classify()` and the orchestrator iterate the list; adding a strategy is
   "write `strat_<x>`, append one `Strategy`". The old hand-written `classify`
   ladder and `__init__` if/elif dispatch are gone.
 - **capa feeds strategy selection:** `capa_scan.capabilities(path)` runs a
@@ -117,15 +117,15 @@ release.
   SMC unwrap, an `arithmetic` match promotes the z3 modeller). Results are
   cached per file (path + size + mtime) in-process and on disk; the stream emits
   a `capa_running` event only for a real (uncached) scan.
-- **`strat_z3`** — models a short arithmetic chain (`add`/`sub`/`xor`/`mul`/
+- **`strat_z3`**: models a short arithmetic chain (`add`/`sub`/`xor`/`mul`/
   `shl`/`shr`/`rol`/`ror`/`neg`/`not`) applied to the input ahead of a
   constant-compare guard and solves it with z3.
-- **`strat_uaf` routing analysis** — recon disassembles the flag function's
+- **`strat_uaf` routing analysis**: recon disassembles the flag function's
   callee and classifies how the planted callback's `arg1` is consumed: a
   session `id` (compared to a far struct field), a socket `fd` (passed to
-  `send`/`write`), or a `ptr` (dereferenced — reported as needing a separate
+  `send`/`write`), or a `ptr` (dereferenced; reported as needing a separate
   leak). The generated exploit routes accordingly.
-- **`strat_brute`** — feedback-oracle key recovery against a runnable checker:
+- **`strat_brute`**: feedback-oracle key recovery against a runnable checker:
   char-by-char, then a short digit-keyspace fallback, both bounded by `timeout`
   and a run ceiling.
 - **Auto Solve live progress:** `GET /api/autopwn/stream` (Server-Sent Events)
@@ -133,17 +133,17 @@ release.
   `done`. `solve()` gained an optional `on_event` callback.
 
 ### Fixed
-- **Decompiler panel** rendered pseudo-C drifting right — the syntax highlighter
+- **Decompiler panel** rendered pseudo-C drifting right: the syntax highlighter
   re-matched the `var(` inside its own injected `style="color:var(--x)"`.
   Highlighting is now class-based (`.pc-*`) and the code column is left-aligned.
 - **Stale panels:** loading a new binary left every lazily-populated panel
   showing the previous binary's results; `_load()` now calls `resetPanels()`.
-- **`strat_fmt` crash** on a Linux host — `_probe_network` hardcoded a `wsl`
+- **`strat_fmt` crash** on a Linux host: `_probe_network` hardcoded a `wsl`
   spawn. It now selects the runtime like `runner` and treats a missing runtime
   as a clean "could not start the service".
 - `classify` no longer silently skips a strategy for want of a scoring branch.
 
-## [2.4.0] — Sandbox, telemetry, self-modifying-code unwrap
+## [2.4.0] - Sandbox, telemetry, self-modifying-code unwrap
 
 The auto-solver was re-scoped from "one-shot the challenge" to a **recon +
 first-move accelerator**: the ranked plan and per-strategy parameters/scaffold
@@ -152,7 +152,7 @@ full static `recon` (also on failure) and the CLI prints it when no flag is
 found.
 
 ### Added
-- **`strat_smc`** — static self-modifying-code unwrap. Repairs a mangled ELF
+- **`strat_smc`**: static self-modifying-code unwrap. Repairs a mangled ELF
   `e_ident`, recovers the exact rewrite span from the entry decoder stub
   (skip-junk disasm of its `mov end` / `mov count` immediates), brute-forces a
   reversible per-byte transform family (`xor`/`rol`/`ror`/`add`/`sub`/`not` and
@@ -163,14 +163,14 @@ found.
   `PT_LOAD` fully contained in another, so the decoded image loads cleanly in
   `cle` / angr. New `"smc"` plan when a RWE `PT_LOAD` or trashed `e_ident` is
   seen.
-- **`Disassembler.disassemble(..., skip_junk=True)`** — anti-disassembly mode
+- **`Disassembler.disassemble(..., skip_junk=True)`**: anti-disassembly mode
   that steps over `eb 01` / `7x 01` + junk-byte sequences to the real jump
   target and resyncs on undecodable bytes.
-- **Execution sandbox** — `runner` wraps every target and generated
+- **Execution sandbox**: `runner` wraps every target and generated
   exploit-script run in `bwrap` (no network, ro-root, private `/tmp`) or
   `unshare` (loopback-only island for the self-tests). `TRIAGE_SANDBOX=off`
   runs bare; `=strict` refuses to run unsandboxed.
-- **Telemetry** — each solve appends a JSONL row (strategy mix, timings, arch,
+- **Telemetry**: each solve appends a JSONL row (strategy mix, timings, arch,
   outcome) to `$TRIAGE_RESULTS` or `~/.triage/results.jsonl`.
 - `recon` is returned by `POST /api/autopwn`, the CLI `--json`, and printed on a
   failed solve. `make deps-canary` runs the solver suite against unpinned-latest
@@ -182,37 +182,37 @@ found.
 ### Fixed
 - `classify` no longer silently skips self-modifying binaries.
 
-## [2.3.0] — More solver strategies, one-click solve, UI refresh
+## [2.3.0] - More solver strategies, one-click solve, UI refresh
 
 ### Added
-- **`strat_keygen`** — recovers an `input == CONSTANT → win()` gate on any
+- **`strat_keygen`**: recovers an `input == CONSTANT → win()` gate on any
   architecture (x86 / x86-64 / SPARC / MIPS / ARM / PPC), formats the key the
   way the program reads it (`scanf %x` → hex), feeds it in, and statically
   reconstructs a flag the win function assembles from immediates.
-- **`strat_uaf`** — dangling-callback use-after-free auto-exploit. Detects the
+- **`strat_uaf`**: dangling-callback use-after-free auto-exploit. Detects the
   shape (a networked service that `free()`s then `getenv()`s), auto-recovers the
   flag function, struct size, listen port, WebSocket-vs-raw framing and the
   command verbs, emits a WebSocket exploit, and self-tests it against a spawned
   instance.
-- **One-click Auto Solve** — a headline panel/button in the web UI: classify →
+- **One-click Auto Solve**, a headline panel/button in the web UI: classify →
   run every strategy → show the flag, the plan, every attempt and the winning
   script.
 - CLI entry `triage-autopwn`, `make autopwn BIN=…`.
 
 ### Changed
-- **Web UI redesign** — modern layered-dark palette with a single accent;
+- **Web UI redesign**: modern layered-dark palette with a single accent;
   refreshed sidebar, panels, toolbars, tabs, buttons, tables, toast. Merged
   panels: **Exploit** (Vulns / Attack Paths / ROP / Solvers) and **Data**
   (Imports / Exports / Symbols / Strings / Sections).
 
 ### Fixed
-- `loader` — ELF `e_machine` now maps SPARC / MIPS / PPC / RISC-V (was silently
+- `loader`: ELF `e_machine` now maps SPARC / MIPS / PPC / RISC-V (was silently
   reporting `x86_64` for every non-x86 target).
 
-## [2.2.0] — Automated solver + full coverage
+## [2.2.0] - Automated solver + full coverage
 
 ### Added
-- **`triage_web.autopwn`** — an end-to-end auto-solver. `solve(path)` classifies
+- **`triage_web.autopwn`**: an end-to-end auto-solver. `solve(path)` classifies
   the target and runs strategies in priority order until one yields a flag:
   **emulate** (unicorn-run a function, scan memory/output), **angr**
   (symbolic-execute to a success state), **ret2win** (symbolic saved-return
@@ -231,17 +231,17 @@ found.
 
 ### Fixed
 - `api_exploit_techniques` NX heuristic did substring ops on the integer
-  section-flags word, threw `TypeError` every call and swallowed it — now
+  section-flags word, threw `TypeError` every call and swallowed it; now
   decodes ELF `SHF_*` / PE `IMAGE_SCN_*` bits.
 - `loader.protections()` only recognised the legacy `DT_BIND_NOW` tag, so modern
   full-RELRO binaries were reported "Partial"; now also reads `DF_BIND_NOW` /
   `DF_1_NOW`. Any `__*_chk` symbol counts as Fortify Source.
 
-## [2.1.0] — Cross-platform + tooling
+## [2.1.0] - Cross-platform + tooling
 
 ### Added
 - Runs on native **Windows** and from **WSL**.
-- `triage_web/analysis.py` — binary-analysis / exploit-intel helpers, extracted
+- `triage_web/analysis.py`: binary-analysis / exploit-intel helpers, extracted
   from `server.py` and unit-tested directly.
 - Rebuilt **Hex tab**: offset ⇄ virtual-address modes, paging, section jump,
   hover/selection inspector (u8…u64 LE/BE), byte/string search.
@@ -270,10 +270,10 @@ found.
   encoding, `/api/capa` 500 → 400, `loader._clear_caches()` `AttributeError` on
   the second load.
 
-## [2.0.0] — Pseudo-C decompiler
+## [2.0.0] - Pseudo-C decompiler
 
 ### Added
-- `decompile_function()` — pseudo-C decompilation engine in `engine.py`, its
+- `decompile_function()`: pseudo-C decompilation engine in `engine.py`, its
   `/api/disasm/decompile` HTTP endpoint, and a Code panel in the SPA with
   Pseudo-C / Asm toggles and keyword highlighting.
 - Instruction → C translation: register-value tracking with stack-variable
@@ -287,7 +287,7 @@ found.
 - Nine `[base+offset]` regexes switched `re.match` → `re.search` with flexible
   whitespace to handle capstone's `[rsp + 0x2c]` formatting.
 - Call-argument collection bounded to a 6-instruction window with call-boundary
-  detection, backward iteration, and 32-bit register-name mapping — prevents
+  detection, backward iteration, and 32-bit register-name mapping; prevents
   stale args spilling across calls.
 - `movabs` handled alongside `mov`; register-alias propagation tries both 32-
   and 64-bit capstone names; return-value inlining after `call malloc` emits
