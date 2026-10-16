@@ -44,7 +44,7 @@ release.
   fast test path.
 
 ### Fixed
-- **Two independent "ultra-deep" whole-repo review passes closed 10
+- **Two independent whole-repo security review passes closed 10
   findings**: unquoted/mis-quoted shell interpolation in the autopwn
   WSL/POSIX bridge (CWE-78), no CSRF/Origin check on state-mutating
   routes, `_srop_chain` crashing on every 32-bit target (plus a follow-up:
@@ -67,13 +67,13 @@ release.
   dependency chain, not as a declared test dependency; a fresh environment
   without that chain hit a hard `RuntimeError` at test collection. `httpx2`
   (the actually-required package) is now declared directly.
-- Several AI-slop-adjacent frontend tells caught by an explicit design
-  audit: 8 stray `border-radius` values contradicting the CSS's own
-  sharp-corners rule, 3 inline colors that bypassed the design tokens for
-  raw, more-saturated defaults, and one full-color emoji among otherwise
-  single-tone section-label glyphs.
-- 24 findings from an earlier five-lens code review (2 Critical XSS, 3
-  High, 6 Medium, 13 Low) across the web surface.
+- Several frontend inconsistencies caught by a design review: 8 stray
+  `border-radius` values contradicting the CSS's own sharp-corners rule,
+  3 inline colors that bypassed the design tokens for raw, more-saturated
+  defaults, and one full-color emoji among otherwise single-tone
+  section-label glyphs.
+- 24 findings from an earlier code review (2 Critical XSS, 3 High,
+  6 Medium, 13 Low) across the web surface.
 - **CI runs green on Linux**: the suite had only ever run on Windows. The first
   real CI run surfaced: `ruff format --check` reformatting Markdown code blocks;
   the sandbox picking `unshare` on hosts that block unprivileged user
