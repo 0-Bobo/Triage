@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import shlex
 
 import pytest
@@ -691,20 +692,22 @@ def test_fmt_local_probe_reaches_the_shared_runner_route(vuln_samples):
     takes the local-probe run_script() branch in strat_fmt.py — the same
     shared WSL/sandbox route autopwn's other live strategies use.
 
-    vuln_pie's vuln() only runs when invoked with an argv (``if (argc > 1)
-    vuln(argv[1])``); the generated probe script drives it over stdin, so
-    the process exits before the probe is sent and pwntools' own
-    ``tubes/process.py`` raises EOFError instead of reaching the trailing
-    ``print("\\nFLAG:", ...)`` line. That EOFError traceback is still proof
-    the route was reached rather than short-circuited to the no-runtime
-    fallback: pwnlib's own source path can only show up in the leak if
-    pwntools genuinely executed inside WSL/Linux.
+    Regression: vuln_pie's vuln() only runs when invoked with an argv
+    (``if (argc > 1) vuln(argv[1])``). The generated probe script used to
+    only ever try stdin, which closed before anything was sent, and the
+    script's own sendline()/recvall() weren't wrapped for BrokenPipeError
+    (only EOFError) — the whole script crashed with an unhandled
+    traceback, never actually probing the format-string sink at all. The
+    probe now also tries argv, and the exception handling is broad enough
+    to survive a target that never reads stdin: it must produce a real
+    leak (hex pointer values from %p), not a crash.
     """
     from triage_web.autopwn.strat_fmt import solve_format_string
 
     res = solve_format_string(str(vuln_samples["vuln_pie"]))
     if _CAN_RUN_ELF:
-        assert "FLAG:" in res.leak or "pwnlib" in res.leak
+        assert "Traceback" not in res.leak and "BrokenPipeError" not in res.leak
+        assert re.search(r"0x[0-9a-f]+", res.leak), f"expected a real %p leak, got: {res.leak!r}"
     else:
         assert res.script
 

