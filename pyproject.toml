@@ -8,7 +8,7 @@ authors = [{ name = "0-Bobo" }]
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.110",
-  "uvicorn>=0.27",
+  "uvicorn>=0.54.0",
   "python-multipart>=0.0.9",
   "capstone>=5.0",
   "pyelftools>=0.29",

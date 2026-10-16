@@ -10,7 +10,7 @@
 
 # ── Required ──────────────────────────────────────────────────────────
 fastapi>=0.110
-uvicorn>=0.27
+uvicorn>=0.54.0
 python-multipart>=0.0.9      # FastAPI form/file upload parsing
 capstone>=5.0                # disassembly engine (hard requirement)
 
