@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import platform
 import re
-import subprocess
 import textwrap
 import time
 from dataclasses import dataclass, field
 
-from triage_web.autopwn.runner import _sh_quote, extract_flags, have_wsl, run_path, run_script, to_wsl
+from triage_web.autopwn.runner import _sh_quote, extract_flags, have_wsl, run_path, run_script
 from triage_web.loader import BinaryLoader
 
 try:
@@ -555,59 +554,15 @@ def _emit_exploit(exe_path, flag_func, struct_size, port, ws, verbs, route="unkn
     )
 
 
-def _wait_for_port(port: int, *, deadline: float, log) -> bool:
-    """Poll the service's listen port (via the same runtime the exploit uses)."""
-    import socket as _sk
-
-    end = time.monotonic() + deadline
-    while time.monotonic() < end:
-        if _on_linux():
-            s = _sk.socket()
-            s.settimeout(0.5)
-            try:
-                s.connect(("127.0.0.1", port))
-                s.close()
-                log.append(f"service up on :{port}")
-                return True
-            except OSError:
-                pass
-            finally:
-                s.close()
-        else:
-            r = subprocess.run(
-                ["wsl", "-e", "bash", "-lc", f"exec 3<>/dev/tcp/127.0.0.1/{port} && echo up"],
-                capture_output=True,
-                timeout=4,
-                check=False,
-            )
-            if b"up" in r.stdout:
-                log.append(f"service up on :{port}")
-                return True
-        time.sleep(0.4)
-    log.append(f"service never bound :{port} within {deadline}s")
-    return False
-
-
-def _server_cmd(path) -> list[str]:
-    wsl_bin = to_wsl(path)
-    if _on_linux():
-        return ["/bin/sh", "-c", f"FLAG={_SELFTEST_FLAG} exec {_sh_quote(str(path))}"]
-    folder = to_wsl(str(path).rsplit("\\", 1)[0]) if "\\" in str(path) else "."
-    return [
-        "wsl",
-        "-e",
-        "bash",
-        "-lc",
-        f"cd {_sh_quote(folder)} 2>/dev/null; FLAG={_SELFTEST_FLAG} exec {_sh_quote(wsl_bin)}",
-    ]
-
-
-def _kill_server(path, server) -> None:
-    server.terminate()
-    try:
-        subprocess.run(["wsl", "-e", "bash", "-lc", f"pkill -f {_sh_quote(to_wsl(path))}"], timeout=5, check=False)
-    except (OSError, subprocess.SubprocessError):  # pragma: no cover
-        pass
+def _server_shell_cmd(path) -> str:
+    """The self-test target's launch command, as a plain shell snippet for
+    run_script()'s server_cmd= - started inside the SAME sandboxed
+    invocation as the exploit script (see run_script's docstring: a server
+    launched as a separate subprocess on the host sits in a different
+    network namespace than a net=True-sandboxed client and can never be
+    reached by it, which is why this self-test never actually worked end
+    to end before)."""
+    return f"FLAG={_sh_quote(_SELFTEST_FLAG)} exec {_sh_quote(run_path(path))}"
 
 
 def _run_selftest(path, script, timeout, log) -> str | None:
@@ -615,19 +570,17 @@ def _run_selftest(path, script, timeout, log) -> str | None:
     fd, read from the receiver's own WATCH reply / socket) - it does not need
     a guessed value. A successful trigger crashes the service, so give it a
     few fresh instances in case one run loses a race against the server's
-    own thread/connection teardown timing."""
+    own thread/connection teardown timing.
+
+    The server is started by run_script() itself (server_cmd=), inside the
+    same sandboxed invocation as the exploit script - see its docstring."""
     per = max(15.0, timeout / 3)
+    server_cmd = _server_shell_cmd(path)
     for attempt in range(3):
-        server = subprocess.Popen(_server_cmd(path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            if not _wait_for_port(8765, deadline=8.0, log=log):
-                continue
-            proc = run_script(script, timeout=per, env={"TRIAGE_ROUNDS": "3"})
-            hits = extract_flags(proc.stdout + proc.stderr)
-            log.append(f"attempt {attempt}: rc={proc.returncode} {proc.text.strip()[:160]!r}")
-            if hits:
-                return hits[0]
-        finally:
-            _kill_server(path, server)
+        proc = run_script(script, timeout=per, env={"TRIAGE_ROUNDS": "3"}, server_cmd=server_cmd, server_port=8765)
+        hits = extract_flags(proc.stdout + proc.stderr)
+        log.append(f"attempt {attempt}: rc={proc.returncode} {proc.text.strip()[:160]!r}")
+        if hits:
+            return hits[0]
         time.sleep(0.2)
     return None

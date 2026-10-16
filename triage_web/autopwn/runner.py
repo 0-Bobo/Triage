@@ -282,6 +282,8 @@ def run_script(
     stdin: bytes = b"",
     env: dict[str, str] | None = None,
     net: bool = True,
+    server_cmd: str | None = None,
+    server_port: int | None = None,
 ) -> ProcResult:
     """Run a generated Python solver/exploit script, sandboxed.
 
@@ -290,14 +292,41 @@ def run_script(
     real Linux process environment are available. On Linux it runs directly.
     Exploit scripts default to ``net=True`` (loopback-only island) since the
     UAF / format-string self-tests talk to a local service.
+
+    ``server_cmd``, when given, is a shell command for a local helper
+    service (e.g. a self-test's own target) started in the background
+    *inside the same sandboxed invocation* as the script, so both share one
+    network namespace and can actually reach each other over loopback. A
+    server started as a separate ``subprocess.Popen`` on the host can never
+    be reached by a ``net=True``-sandboxed client: that sandbox's loopback
+    is its own isolated namespace, not the host's. ``server_port``, if
+    given, is polled until it accepts a connection before the script runs;
+    without it, a fixed short delay is used instead.
     """
     src = "# -*- coding: utf-8 -*-\n" + src  # tolerate non-ASCII bytes read from stdin
     env_pairs = [f"{k}={_sh_quote(v)}" for k, v in (env or {}).items()]
     heredoc = "__TRIAGE_SOLVER_EOF__"
 
+    server_prefix, server_suffix = "", ""
+    if server_cmd:
+        wait = (
+            f"for _i in $(seq 1 25); do (exec 3<>/dev/tcp/127.0.0.1/{server_port}) 2>/dev/null "
+            "&& exec 3<&- 3>&- && break; sleep 0.2; done; "
+            if server_port
+            else "sleep 1; "
+        )
+        server_prefix = f"({server_cmd}) >/dev/null 2>&1 & SERVER_PID=$!; {wait}"
+        server_suffix = "; kill $SERVER_PID 2>/dev/null || true"
+
     if _on_linux():
         interp = python or shutil.which("python3") or "python3"
-        base = " ".join(env_pairs) + (" " if env_pairs else "") + f"{interp} - <<'{heredoc}'\n{src}\n{heredoc}\n"
+        base = (
+            server_prefix
+            + " ".join(env_pairs)
+            + (" " if env_pairs else "")
+            + f"{interp} - <<'{heredoc}'\n{src}\n{heredoc}\n"
+            + server_suffix
+        )
         cmd, note = _sandbox_wrap(base, os.getcwd(), net=net, bash_prefix=["/bin/bash", "-c"])
         if not cmd:
             return ProcResult(None, b"", note.encode(), False, 0.0, "", runnable=False, note=note)
@@ -311,7 +340,7 @@ def run_script(
         )
     interp = python or "$( [ -x ~/pwn-venv/bin/python ] && echo ~/pwn-venv/bin/python || command -v python3 )"
     prefix = " ".join([*env_pairs, "PYTHONUTF8=1"]) + " "
-    base = f"{prefix}{interp} - <<'{heredoc}'\n{src}\n{heredoc}\n"
+    base = server_prefix + f"{prefix}{interp} - <<'{heredoc}'\n{src}\n{heredoc}\n" + server_suffix
     cmd, note = _sandbox_wrap(base, "$HOME", net=net, bash_prefix=["wsl", "-e", "bash", "-lc"])
     if not cmd:
         return ProcResult(None, b"", note.encode(), False, 0.0, "", runnable=False, note=note)
