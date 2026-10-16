@@ -1,7 +1,7 @@
 ## Context
 
-A fast orientation for anyone new to this repo. `README.md`
-is the pitch and quick start; `ARCHITECTURE.md` is the detailed technical
+A fast orientation for anyone new to this repo. [`README.md`](README.md)
+is the pitch and quick start; [`ARCHITECTURE.md`](ARCHITECTURE.md) is the detailed technical
 walkthrough. This page is the map between them: what Triage actually is,
 how the pieces fit, and where to look first for a given kind of change.
 
@@ -43,16 +43,16 @@ regressed under the page's CSP); see "Change the UI" below.
 
 ## Reading order for a newcomer
 
-1. `README.md`: what it does, quick start, the `autopwn` strategy table.
+1. [`README.md`](README.md): what it does, quick start, the `autopwn` strategy table.
 2. This file: the map you're reading.
-3. `ARCHITECTURE.md`: directory-by-directory detail, the request-flow
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md): directory-by-directory detail, the request-flow
    diagram, the coverage contract, known gotchas. Read this before touching
    `server.py` or `autopwn/`.
-4. `CONTRIBUTING.md`: PR expectations, the golden-output-test rule for new
+4. [`CONTRIBUTING.md`](CONTRIBUTING.md): PR expectations, the golden-output-test rule for new
    `autopwn` strategies.
-5. `SECURITY.md`: the threat model. Read this before ever running the
+5. [`SECURITY.md`](SECURITY.md): the threat model. Read this before ever running the
    server anywhere but your own machine.
-6. `ENGINEERING.md`: decision-level walkthroughs of specific subsystems
+6. [`ENGINEERING.md`](ENGINEERING.md): decision-level walkthroughs of specific subsystems
    (the two decompilers, anti-disassembly handling, autopwn's strategy
    registry, the sandbox, WSL routing, a real bug and how it surfaced).
    Narrative, not a reference map; read it for *why*, not *where*.
@@ -62,8 +62,8 @@ regressed under the page's CSP); see "Change the UI" below.
 | You want to... | Start here |
 |---|---|
 | Fix/extend static analysis (new protection check, new string pattern) | `triage_web/analysis.py`, `triage_web/loader.py` |
-| Add a disassembly/decompiler feature | `triage_web/engine.py` (shipped decompiler); `triage_web/pcode.py` + friends is the **experimental, unwired** p-code pipeline, see `ARCHITECTURE.md` §4 before touching it |
-| Add a new `autopwn` strategy | `triage_web/autopwn/strat_*.py` for the pattern, `registry.py` for the scoring hook, `CONTRIBUTING.md` for the golden-test requirement |
+| Add a disassembly/decompiler feature | `triage_web/engine.py` (shipped decompiler); `triage_web/pcode.py` + friends is the **experimental, unwired** p-code pipeline, see [`ARCHITECTURE.md`](ARCHITECTURE.md) §4 before touching it |
+| Add a new `autopwn` strategy | `triage_web/autopwn/strat_*.py` for the pattern, `registry.py` for the scoring hook, [`CONTRIBUTING.md`](CONTRIBUTING.md) for the golden-test requirement |
 | Add/fix an exploit-script generator | `triage_web/solvers.py`: one `_foo(path, bits, arch, ...)` function per generator, registered in `SOLVER_GENERATORS` |
 | Add an HTTP route | `triage_web/server.py`: keep it a thin seam; put logic in `analysis.py`/`loader.py`/`engine.py` and call it from the route |
 | Change the UI | `triage_web/index.html`: markup, inline `<style>` (design tokens in `:root`), and inline `<script>`, no build step, so edits are live on refresh |
@@ -85,7 +85,7 @@ regressed under the page's CSP); see "Change the UI" below.
   `emit_c.py`, `decompile_actions.py`: a complete, working, but unwired
   Ghidra-style decompiler pipeline (real SSA, dominance, structuring). It's
   excluded from the coverage gate on purpose. Don't delete it reflexively
-  and don't wire it up casually, see `ARCHITECTURE.md` §4 for the actual
+  and don't wire it up casually, see [`ARCHITECTURE.md`](ARCHITECTURE.md) §4 for the actual
   trade-off.
 
 ## The non-negotiable contract
@@ -94,6 +94,6 @@ regressed under the page's CSP); see "Change the UI" below.
 surface (everything except the experimental decompiler and the `strat_*`
 strategy files, which have their own opt-in `make coverage-strat` report)
 stays at `fail_under = 100`. A new `autopwn` strategy or solver generator
-ships with a test in the same commit, see `CONTRIBUTING.md`. The frontend
+ships with a test in the same commit, see [`CONTRIBUTING.md`](CONTRIBUTING.md). The frontend
 stays a single static file with no build step; if a change needs a
 bundler, it's the wrong change for this repo.
