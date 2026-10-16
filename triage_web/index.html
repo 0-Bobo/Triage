@@ -1418,6 +1418,13 @@
       font-family: var(--font-mono);
     }
 
+    .about-caps div .ico svg {
+      width: 13px;
+      height: 13px;
+      display: block;
+      flex-shrink: 0;
+    }
+
     .about-keys {
       font-family: var(--font-mono);
       font-size: 11px;
@@ -1599,14 +1606,14 @@
               </div>
             </div>
             <div class="about-caps empty-hero-caps">
-              <div><span class="ico">{&#160;}</span>Decompiler</div>
-              <div><span class="ico">&#9776;</span>Disassembly</div>
-              <div><span class="ico">#</span>Hex viewer</div>
-              <div><span class="ico">&#8596;</span>Cross-refs</div>
-              <div><span class="ico">!</span>ROP search</div>
-              <div><span class="ico">C</span>CAPA</div>
-              <div><span class="ico">&#9889;&#xFE0E;</span>Autopwn</div>
-              <div><span class="ico">&larr;</span>Imports / strings</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5-5 7 5 7"/><path d="m15 5 5 7-5 7"/><path d="m13.5 4-3 16"/></svg></span>Decompiler</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h3.5M10 6.5h9"/><path d="M4 11.5h2M8.5 11.5H20"/><path d="M4 16.5h4.5M11 16.5h5.5"/><path d="m7.5 5.2 1 1.3-1 1.3M6 10.2l1 1.3-1 1.3M9 15.2l1 1.3-1 1.3"/></svg></span>Disassembly</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="4" height="4" rx=".6"/><rect x="10" y="4" width="4" height="4" rx=".6"/><rect x="16" y="4" width="4" height="4" rx=".6"/><rect x="4" y="10" width="4" height="4" rx=".6"/><rect x="10" y="10" width="4" height="4" rx=".6"/><rect x="16" y="10" width="4" height="4" rx=".6"/><rect x="4" y="16" width="4" height="4" rx=".6"/><rect x="10" y="16" width="4" height="4" rx=".6"/><rect x="16" y="16" width="4" height="4" rx=".6"/></svg></span>Hex viewer</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="m7.1 11.2 9.7-4.3M7.1 12.8l9.7 4.3"/><path d="m14.9 5.8 2-.1-.4 2M14.9 18.2l2 .1-.4-2"/></svg></span>Cross-refs</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/><path d="m17.2 6.8 2-2"/></svg></span>ROP search</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V4.5h13l-2.2 3.2 2.2 3.2H5"/><path d="M8 7.7h4.5"/></svg></span>CAPA</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 14.2 9.8 20.5 12l-6.3 2.2L12 20.5l-2.2-6.3L3.5 12l6.3-2.2L12 3.5Z"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M4 18.5h4M6 16.5v4"/></svg></span>Autopwn</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.7"/><path d="M4.5 5.5v12.7c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V5.5"/><path d="M4.5 11.8c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7"/></svg></span>Imports / strings</div>
             </div>
           </div>
           <div id="info-content" style="display:none;overflow:auto;flex:1;padding:14px">
@@ -2031,13 +2038,22 @@
         <div class="panel" id="panel-about">
           <div class="about-wrap">
             <div style="display:flex;align-items:center;gap:10px">
-              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--accent)" stroke-width="2"
-                stroke-linecap="square" aria-hidden="true">
-                <path d="M4 9V6a2 2 0 0 1 2-2h3" />
-                <path d="M15 4h3a2 2 0 0 1 2 2v3" />
-                <path d="M20 15v3a2 2 0 0 1-2 2h-3" />
-                <path d="M9 20H6a2 2 0 0 1-2-2v-3" />
-                <circle cx="12" cy="12" r="1.6" fill="var(--accent)" stroke="none" />
+              <svg width="26" height="26" viewBox="0 0 512 512" aria-hidden="true">
+                <defs>
+                  <linearGradient id="about-rim" x1="55" y1="55" x2="450" y2="450" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#20D7FF" /><stop offset=".27" stop-color="#2677FF" />
+                    <stop offset=".52" stop-color="#8B5CF6" /><stop offset=".76" stop-color="#FF3D71" />
+                    <stop offset="1" stop-color="#FFB52E" />
+                  </linearGradient>
+                  <linearGradient id="about-glass" x1="90" y1="90" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#171D29" /><stop offset="1" stop-color="#080B11" />
+                  </linearGradient>
+                </defs>
+                <rect x="54" y="54" width="404" height="404" rx="102" fill="url(#about-glass)"
+                  stroke="url(#about-rim)" stroke-width="24" />
+                <path d="M165 164 256 256 165 348" fill="none" stroke="#F4F7FB" stroke-width="30"
+                  stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M270 358h83" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" />
               </svg>
               <div>
                 <div
@@ -2056,14 +2072,14 @@
 
             <div class="about-section-lbl" style="margin-top:22px">Capabilities</div>
             <div class="about-caps">
-              <div><span class="ico">{&#160;}</span>Pseudo-C decompiler</div>
-              <div><span class="ico">&#9776;</span>Disassembly</div>
-              <div><span class="ico">#</span>Hex viewer</div>
-              <div><span class="ico">&#8596;</span>Cross-references</div>
-              <div><span class="ico">!</span>ROP gadget search</div>
-              <div><span class="ico">C</span>CAPA capabilities</div>
-              <div><span class="ico">&#9889;&#xFE0E;</span>Autopwn strategies</div>
-              <div><span class="ico">&larr;</span>Imports / strings / sections</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5-5 7 5 7"/><path d="m15 5 5 7-5 7"/><path d="m13.5 4-3 16"/></svg></span>Pseudo-C decompiler</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h3.5M10 6.5h9"/><path d="M4 11.5h2M8.5 11.5H20"/><path d="M4 16.5h4.5M11 16.5h5.5"/><path d="m7.5 5.2 1 1.3-1 1.3M6 10.2l1 1.3-1 1.3M9 15.2l1 1.3-1 1.3"/></svg></span>Disassembly</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="4" height="4" rx=".6"/><rect x="10" y="4" width="4" height="4" rx=".6"/><rect x="16" y="4" width="4" height="4" rx=".6"/><rect x="4" y="10" width="4" height="4" rx=".6"/><rect x="10" y="10" width="4" height="4" rx=".6"/><rect x="16" y="10" width="4" height="4" rx=".6"/><rect x="4" y="16" width="4" height="4" rx=".6"/><rect x="10" y="16" width="4" height="4" rx=".6"/><rect x="16" y="16" width="4" height="4" rx=".6"/></svg></span>Hex viewer</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="m7.1 11.2 9.7-4.3M7.1 12.8l9.7 4.3"/><path d="m14.9 5.8 2-.1-.4 2M14.9 18.2l2 .1-.4-2"/></svg></span>Cross-references</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/><path d="m17.2 6.8 2-2"/></svg></span>ROP gadget search</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V4.5h13l-2.2 3.2 2.2 3.2H5"/><path d="M8 7.7h4.5"/></svg></span>CAPA capabilities</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 14.2 9.8 20.5 12l-6.3 2.2L12 20.5l-2.2-6.3L3.5 12l6.3-2.2L12 3.5Z"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M4 18.5h4M6 16.5v4"/></svg></span>Autopwn strategies</div>
+              <div><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.7"/><path d="M4.5 5.5v12.7c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V5.5"/><path d="M4.5 11.8c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7"/></svg></span>Imports / strings / sections</div>
             </div>
 
             <div class="about-section-lbl">Hex viewer shortcuts</div>
