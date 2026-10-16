@@ -189,7 +189,10 @@ tests/                   pytest suite plus the golden-recon fixtures
 samples/                 small purpose-built test binaries and their C source
 ```
 
-`ARCHITECTURE.md` has the full walkthrough.
+`ARCHITECTURE.md` has the full walkthrough. `ENGINEERING.md` goes deeper on
+why six specific pieces (the two decompilers, the anti-disassembly
+handling, autopwn's strategy registry, the sandbox, the WSL routing, and a
+real bug and how it was actually found) are built the way they are.
 
 ## Development
 
