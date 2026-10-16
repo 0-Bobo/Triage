@@ -1750,6 +1750,14 @@
               <pre id="auto-proof"
                 style="margin:0;padding:12px;font-size:10.5px;line-height:1.6;white-space:pre-wrap;overflow:auto;flex:1;min-height:0"></pre>
             </div>
+            <div class="term" id="auto-writeup-term" style="display:none;margin:8px 26px;max-height:44vh">
+              <div class="term-bar">
+                <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+                <span class="term-title">writeup.md</span>
+              </div>
+              <pre id="auto-writeup-preview"
+                style="margin:0;padding:12px;font-size:10.5px;line-height:1.6;white-space:pre-wrap;overflow:auto;flex:1;min-height:0"></pre>
+            </div>
           </div>
         </div>
 
@@ -2132,6 +2140,7 @@
     function onShowAuto() { }
     let _autoStream = null;
     let _lastAutoResult = null;
+    let _lastWriteupMarkdown = null;
 
     function runAutoSolve() {
       if (!loaded) { toast('Load a binary first', 'error'); return; }
@@ -2146,6 +2155,7 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Working…';
       flagEl.style.display = 'none'; document.getElementById('auto-proof-term').style.display = 'none'; attemptsEl.innerHTML = ''; planEl.textContent = '';
       document.getElementById('auto-writeup-btn').style.display = 'none'; _lastAutoResult = null;
+      document.getElementById('auto-writeup-term').style.display = 'none'; document.getElementById('auto-writeup-preview').textContent = ''; _lastWriteupMarkdown = null;
       statusEl.textContent = 'Starting recon…';
       setStatus('Auto-solving…', true);
 
@@ -2198,6 +2208,7 @@
             statusEl.innerHTML = 'Solved via <b>' + esc(d.strategy) + '</b> in ' + d.seconds + 's. Click the flag to copy';
             document.getElementById('auto-writeup-btn').style.display = '';
             toast('Flag: ' + d.flag, 'ok');
+            previewWriteup(d);
           } else {
             statusEl.textContent = 'No flag in ' + (d.seconds || 0) + 's. ' + esc(d.notes || 'every strategy was exhausted.');
             toast('Auto-solve found no flag', 'error');
@@ -2237,14 +2248,26 @@
       if (busy) { ind.classList.add('busy'); } else { ind.classList.remove('busy'); }
     }
 
+    async function fetchWriteup(result) {
+      const r = await fetch('/api/autopwn/writeup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(result)
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }
+      return (await r.json()).markdown;
+    }
+
+    async function previewWriteup(result) {
+      try {
+        _lastWriteupMarkdown = await fetchWriteup(result);
+        document.getElementById('auto-writeup-preview').textContent = _lastWriteupMarkdown;
+        document.getElementById('auto-writeup-term').style.display = 'flex';
+      } catch (e) { /* preview is best-effort; Save Writeup still re-fetches on click */ }
+    }
+
     async function saveWriteup() {
       if (!_lastAutoResult) { toast('No solved run to write up yet', 'error'); return; }
       try {
-        const r = await fetch('/api/autopwn/writeup', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_lastAutoResult)
-        });
-        if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }
-        const { markdown } = await r.json();
+        const markdown = _lastWriteupMarkdown || await fetchWriteup(_lastAutoResult);
         const blob = new Blob([markdown], { type: 'text/markdown' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
