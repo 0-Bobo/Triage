@@ -326,12 +326,13 @@ def _run_uaf(ctx: RunCtx) -> Attempt:
     r = solve_uaf(ctx.path, timeout=min(200.0, max(60.0, ctx.remaining)))
     finding = None
     if r.flag_func is not None:
-        parts = [f"flag_func={r.flag_func:#x}"]
+        finding = f"a dangling callback at {r.flag_func:#x} is reachable after its backing struct is freed"
         if r.struct_size is not None:  # independently None-able even when flag_func is found
-            parts.append(f"struct={r.struct_size:#x}")
-        parts.append(f"ws={r.websocket}")
-        parts.append(f"route={r.route}")
-        finding = " ".join(parts)
+            finding += f" (struct size {r.struct_size:#x})"
+        finding += f", driven over a {'websocket' if r.websocket else 'TCP'} connection"
+        if r.route != "unknown":
+            route_desc = {"id": "an index/identifier", "fd": "a file descriptor", "ptr": "a raw pointer"}[r.route]
+            finding += f"; its first argument is used as {route_desc}"
     return Attempt("uaf", bool(r.flag), 0.0, _detail(finding, r.reason), r.flag, r.script)
 
 

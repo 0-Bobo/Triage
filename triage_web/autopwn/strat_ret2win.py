@@ -215,7 +215,16 @@ def _emit_script(path: str, info, win_addr: int, offset: int) -> str:
             # non-PIE address usually does, since the top bytes are zero),
             # this only writes the payload up through the last non-NUL byte
             # and relies on whatever is already on the stack past that point
-            # being zero too. Best-effort, not guaranteed to fully land.
+            # being zero too. Best-effort, not guaranteed to fully land: an
+            # audited case (samples/elf64_crackme) confirmed via gdb that
+            # those untouched high bytes are real, non-zero stack contents
+            # (x86-64 Linux user stacks start 0x00007fff..., not zero) -
+            # there is no way to land a NUL-containing address through a
+            # single argv-delivered strcpy, full stop. A target shaped like
+            # that needs a different strategy entirely (angr's use_argv
+            # path solves it symbolically instead of concretely - see
+            # registry.py's _run_angr), not a smarter version of this
+            # attempt.
             arg = chain.split(b"\\x00", 1)[0]
             p = process([exe, arg])
             try:

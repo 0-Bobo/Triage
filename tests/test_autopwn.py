@@ -1301,8 +1301,8 @@ def test_run_uaf_composes_the_recovered_struct_info_with_the_no_flag_reason(monk
     )
     att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)
     assert not att.ok
-    assert "flag_func=0x1234" in att.detail
-    assert "route=fd" in att.detail
+    assert "0x1234" in att.detail and "dangling callback" in att.detail
+    assert "a file descriptor" in att.detail
     assert "generated the exploit" in att.detail
 
 
@@ -1317,7 +1317,7 @@ def test_run_uaf_falls_back_to_reason_when_nothing_recovered(monkeypatch, autopw
     )
     att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)
     assert att.detail == "no free()+getenv() — not the dangling-callback shape"
-    assert "flag_func=" not in att.detail
+    assert "dangling callback" not in att.detail
 
 
 def test_run_uaf_composes_without_struct_size_when_only_flag_func_is_recovered(monkeypatch, autopwn_samples):
@@ -1342,9 +1342,9 @@ def test_run_uaf_composes_without_struct_size_when_only_flag_func_is_recovered(m
     )
     att = ap._run_strategy("uaf", str(autopwn_samples["memflag"]), None, 30)  # must not raise
     assert not att.ok
-    assert "flag_func=0x5000" in att.detail
+    assert "0x5000" in att.detail and "dangling callback" in att.detail
     assert "generated the exploit" in att.detail
-    assert "struct=" not in att.detail
+    assert "struct size" not in att.detail
 
 
 def test_run_brute_composes_the_recovered_prefix_with_the_no_flag_reason(monkeypatch, autopwn_samples):
