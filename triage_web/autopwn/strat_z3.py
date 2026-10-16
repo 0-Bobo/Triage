@@ -9,6 +9,28 @@ those ops on a symbolic input, and ask z3 for a satisfying value.
 
 It reuses ``strat_keygen``'s disassembly + guard-finding helpers so the two
 stay in step; only the modelling is new.
+
+Known bugs, found by a reliability audit while building a real end-to-end
+fixture (samples/src/arith_check.c, not yet wired into the sample set because
+of the second bug below) — not fixed yet:
+
+1. ``_score_z3`` (registry.py) only ranks this strategy when ``not v.has_win``,
+   but ``solve_z3`` itself hard-requires ``_win_addrs()`` to find a win-style
+   function (line ~86 below). Every name ``_win_addrs`` matches is also a
+   name ``has_win`` matches, so the two conditions are mutually exclusive:
+   z3 can never appear in a *natural* ranked plan under the current code,
+   confirmed empirically. The real fix is teaching the solver a winless path
+   (the guard's own taken branch, printing the flag directly, as its own
+   implicit target) rather than requiring a separate named win function.
+2. The arithmetic replay can disagree with the real compiled behaviour: on
+   ``x ^= 0x1337; x += 42; x *= 3; cmp x, 0x7e``, z3 reported a "satisfying"
+   key (``0x1363``) that does not actually satisfy the real binary (verified
+   key is ``0x1337``) - likely a basic-block/op-sequence capture bug in
+   ``_model_guard_block``. ``_run_z3`` (registry.py) already treats a
+   recovered key as unconfirmed until the live replay actually produces a
+   flag, so this doesn't currently surface as a false "solved", but the
+   underlying model is wrong and should not be trusted for its recovered-key
+   value even when z3 itself reports ``sat``.
 """
 
 from __future__ import annotations
