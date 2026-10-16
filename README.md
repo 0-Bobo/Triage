@@ -155,7 +155,7 @@ make check      # ruff check + ruff format --check + pytest
 make coverage   # + term-missing / html / xml
 ```
 
-- 508 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
+- 555 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
   layer drives angr/unicorn/pwntools, so it is exercised end to end but left out
   of the line-coverage gate; `make coverage-strat` reports its real number, and a
   module only joins that opt-out list together with a golden-output test.
@@ -168,6 +168,20 @@ make coverage   # + term-missing / html / xml
 
 ## Roadmap
 
+**Recently shipped**
+- Native/WSL-aware solver routing: autopwn and the Status panel detect
+  angr, z3, unicorn, and pwntools whether they're installed natively or
+  only inside WSL, and route execution to whichever is actually available.
+- Partial-finding surfacing: a strategy that recovers a win address, key,
+  or struct layout without a flag now reports that finding instead of a
+  bare "no flag."
+
+**Planned**
+- A saveable auto-solve writeup (binary info, winning strategy, the exploit
+  script, the flag) once a target is solved.
+- Support for CTF challenges that ship more than one file (e.g. a VM
+  interpreter plus its bytecode).
+- dnSpyEx-backed IL decompilation for mixed-mode C++/CLI .NET binaries.
 - A "dynamic dump" mode for key-driven self-modifying code: run the de-fanged
   image under the sandbox and snapshot the region after it decrypts itself.
 - A targeted angr harness for multi-process anti-analysis binaries.
