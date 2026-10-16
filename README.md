@@ -230,10 +230,16 @@ make coverage   # + term-missing / html / xml
 - Partial-finding surfacing: a strategy that recovers a win address, key,
   or struct layout without a flag now reports that finding instead of a
   bare "no flag."
+- A saveable auto-solve writeup (binary info, winning strategy, the exploit
+  script, the flag) once a target is solved: a "Save Writeup" action in the
+  web UI, and the CLI writes one to disk automatically.
 
 **Planned**
-- A saveable auto-solve writeup (binary info, winning strategy, the exploit
-  script, the flag) once a target is solved.
+- Fixing the experimental p-code decompiler pipeline (see
+  [`ENGINEERING.md`](ENGINEERING.md) §1): it currently drops whole
+  statements in some functions, loses every call argument, and doesn't
+  recognize the prologue/epilogue idiom, so the simpler shipped decompiler
+  stays the default until those are fixed.
 - Support for CTF challenges that ship more than one file (e.g. a VM
   interpreter plus its bytecode).
 - dnSpyEx-backed IL decompilation for mixed-mode C++/CLI .NET binaries.

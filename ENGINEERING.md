@@ -61,11 +61,40 @@ decompiler that already works for one that's "more correct" but less
 battle-tested is exactly the kind of change this project's own
 contributing rules say to avoid without a regression suite to match.
 
-One honest gap: `decompile_with_pcode`'s own exception handler discards
+**This isn't just a maturity gap, it's real, verified bugs.** Running both
+decompilers side by side on real sample binaries (`decompile_with_pcode_demo`
+exists for exactly this) turns up three concrete problems in the p-code
+path, not just "rougher output":
+
+- **Dropped statements.** On `samples/keygate`'s `__do_global_dtors_aux`,
+  the p-code pipeline emits one line, `char tmp_0 = (reg_7229 != 0);`, and
+  silently drops the conditional call, the store, and the return that
+  follow it. The shipped decompiler renders the whole function correctly
+  (if uglier, with a `goto`). This is the highest-severity gap: wrong by
+  omission, not just hard to read.
+- **Lost call arguments, every call, every function.** `sub_4010a0(qword
+  ptr [rip + 0x2e3d], 0, 2, 0)` in the shipped decompiler becomes
+  `sub_4010a0()` in the p-code one. `emit_c.py` has no call-argument
+  collection at all; the shipped decompiler's dual-path register/stack ABI
+  collection has no equivalent in the newer pipeline yet.
+- **No prologue/epilogue idiom recognition.** `push rbp; mov rbp, rsp`
+  renders as raw, meaningless stack arithmetic (`long tmp_0 = tmp_0 - 8;
+  *(tmp_0) = rbp; ...`) instead of being elided, the way the shipped
+  decompiler's prologue-skipping already does.
+
+One real bright spot in the same test: on `keygate`'s `main`, the p-code
+pipeline correctly built nested `if`/`else` *and* surfaced the actual
+secret constant (`0xdeadbeef`) the shipped decompiler never shows (it only
+renders generic `eax != 1` register comparisons). The structuring and
+SSA machinery works; the C-emission layer around it is unfinished.
+
+Separately: `decompile_with_pcode`'s own exception handler discards
 whatever C the generator had already emitted before a mid-structuring
-crash, returning only `// p-code error: <e>`. That's a real bug in the
-unwired path's error handling, left unaddressed because the pipeline it's
-in has no live caller to hit it.
+crash, returning only `// p-code error: <e>`. A fourth, smaller bug in the
+same unwired path's error handling.
+
+None of the four are fixed yet; see the Planned section of
+[`README.md`](README.md) - they're tracked there, not forgotten.
 
 ## 2. Catching the disassembler's own blind spot
 
