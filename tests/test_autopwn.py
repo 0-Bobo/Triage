@@ -342,6 +342,16 @@ def test_smc_strategy_dispatch(monkeypatch, autopwn_samples):
 # ── emulation strategy ───────────────────────────────────────────────
 
 
+def test_bytecmp_matches_c_strcmp_semantics():
+    from triage_web.autopwn.strat_emulate import _bytecmp
+
+    assert _bytecmp(b"abc", b"abc") == 0
+    assert _bytecmp(b"abc", b"abd") < 0
+    assert _bytecmp(b"abd", b"abc") > 0
+    assert _bytecmp(b"ab", b"abc") < 0  # shorter string is a prefix -> "less"
+    assert _bytecmp(b"abc", b"ab") > 0
+
+
 def test_emulate_recovers_an_in_memory_flag(autopwn_samples):
     from triage_web.autopwn.strat_emulate import emulate_for_flag
 
@@ -355,6 +365,51 @@ def test_emulate_rejects_non_x86(pe_path):
 
     r = emulate_for_flag(str(pe_path))
     assert not r.ok and "x86 ELF only" in r.reason
+
+
+def test_emulate_does_not_find_a_rodata_flag_the_program_never_printed(autopwn_samples):
+    # Regression: the memory scan used to read the whole mapped image,
+    # including .rodata — present from before execution even starts — so
+    # any flag-shaped string literal "won" regardless of whether the code
+    # path that prints it (e.g. a win()-only puts()) ever actually ran.
+    # keygate's flag lives in such a literal; a wrong/no key must not find
+    # it.
+    from triage_web.autopwn.strat_emulate import emulate_for_flag
+
+    r = emulate_for_flag(str(autopwn_samples["keygate"]), stdin=b"0\n")
+    assert not r.ok and r.flag is None
+    assert "nope, wrong key" in r.stdout.decode()
+
+
+def test_emulate_models_scanf_and_wins_with_the_real_key(autopwn_samples):
+    # The positive counterpart: with the correct key, scanf (renamed
+    # __isoc99_scanf by glibc) must actually parse it, let win() run for
+    # real, and the flag then comes from captured stdout, not a hit scan.
+    from triage_web.autopwn.strat_emulate import emulate_for_flag
+
+    r = emulate_for_flag(str(autopwn_samples["keygate"]), stdin=b"deadbeef\n")
+    assert r.ok and r.flag == "flag{keygate_static}"
+    assert b"flag{keygate_static}" in r.stdout
+
+
+def test_emulate_strcmp_strcspn_reject_a_wrong_password(autopwn_samples):
+    # keycheck's check is fgets + strcspn (strip the trailing newline) +
+    # strcmp. Both strcspn and strcmp were previously unmodeled: strcspn
+    # defaulted to returning 0 (truncating the input to empty at byte 0),
+    # and strcmp defaulted to returning 0 ("equal") regardless of its
+    # arguments — either bug alone was enough to make a wrong password look
+    # correct.
+    from triage_web.autopwn.strat_emulate import emulate_for_flag
+
+    r = emulate_for_flag(str(autopwn_samples["keycheck"]), stdin=b"definitely_wrong\n")
+    assert not r.ok and r.flag is None
+
+
+def test_emulate_strcmp_strcspn_accept_the_real_password(autopwn_samples):
+    from triage_web.autopwn.strat_emulate import emulate_for_flag
+
+    r = emulate_for_flag(str(autopwn_samples["keycheck"]), stdin=b"sup3rs3cr3t\n")
+    assert r.ok and r.flag == "flag{keycheck_symbolic}"
 
 
 # ── angr strategy ────────────────────────────────────────────────────

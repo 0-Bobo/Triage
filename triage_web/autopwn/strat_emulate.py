@@ -12,6 +12,7 @@ should fall through to angr.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from triage_web.autopwn.runner import extract_flags
@@ -109,7 +110,15 @@ def _emulate(ldr, func, stdin, max_insns, flag_pattern) -> EmulateResult:
 
     hits: list[str] = []
     for lo, hi, _perm in mu.mem_regions():
-        if hi - lo > 0x400000:
+        # Only scan memory the target can genuinely write to at runtime
+        # (heap, stack) — the original PT_LOAD image (.text/.rodata/.data)
+        # is present from before execution even starts, so scanning it
+        # would "find" any flag-shaped string literal regardless of
+        # whether the code that prints it ever actually ran (e.g. a
+        # win()-only puts() call that was never reached).
+        in_heap = _HEAP_BASE <= lo < _HEAP_BASE + _HEAP_SIZE
+        in_stack = _STACK_BASE - _STACK_SIZE <= lo < _STACK_BASE
+        if not (in_heap or in_stack) or hi - lo > 0x400000:
             continue
         try:
             blob = bytes(mu.mem_read(lo, min(hi - lo + 1, 0x200000)))
@@ -127,6 +136,17 @@ def _emulate(ldr, func, stdin, max_insns, flag_pattern) -> EmulateResult:
         memory_hits=list(dict.fromkeys(hits)),
         trace_tail=state.trace[-12:],
     )
+
+
+def _bytecmp(a: bytes, b: bytes) -> int:
+    """C strcmp/memcmp semantics: the signed difference at the first
+    mismatching byte, or the length difference if one is a prefix of the
+    other. The exact magnitude rarely matters to the caller (it's almost
+    always just tested against zero), but the sign must be right."""
+    for x, y in zip(a, b, strict=False):
+        if x != y:
+            return x - y
+    return len(a) - len(b)
 
 
 def _iter_load_segments(ldr):
@@ -276,6 +296,28 @@ class _EmuState:
     def _lib_strlen(self):
         self._ret(len(self._cstr(self._arg(0))))
 
+    def _lib_strcspn(self):
+        s, reject = self._cstr(self._arg(0)), set(self._cstr(self._arg(1)))
+        n = 0
+        for byte in s:
+            if byte in reject:
+                break
+            n += 1
+        self._ret(n)
+
+    def _lib_strcmp(self):
+        self._ret(_bytecmp(self._cstr(self._arg(0)), self._cstr(self._arg(1))))
+
+    def _lib_strncmp(self):
+        n = self._arg(2)
+        self._ret(_bytecmp(self._cstr(self._arg(0))[:n], self._cstr(self._arg(1))[:n]))
+
+    def _lib_memcmp(self):
+        n = self._arg(2)
+        a = bytes(self.mu.mem_read(self._arg(0), n))
+        b = bytes(self.mu.mem_read(self._arg(1), n))
+        self._ret(_bytecmp(a, b))
+
     def _lib_puts(self):
         self.stdout += self._cstr(self._arg(0)) + b"\n"
         self._ret(1)
@@ -317,3 +359,38 @@ class _EmuState:
             self._ret(0)
 
     _lib_strtol = _lib_atoi
+
+    def _lib_scanf(self):
+        # Minimal support: a single numeric conversion (%d/%u/%x), consuming
+        # leading whitespace then the matched token from stdin, same source
+        # _lib_read/_lib_fgets draw from. Multi-specifier formats and %s
+        # aren't modeled — scanf then returns 0 (no items matched), which is
+        # also exactly what real scanf returns when it can't satisfy a
+        # conversion from the given input, so a target gated on checking
+        # the return value still behaves correctly; it just can't be driven
+        # past that point by this emulator.
+        fmt = self._cstr(self._arg(0))
+        specs = [s for s in (b"%x", b"%d", b"%u", b"%i") if s in fmt]
+        if len(specs) != 1 or fmt.count(b"%") != 1:
+            self._ret(0)
+            return
+        base = 16 if specs[0] == b"%x" else 10
+        stripped = bytes(self.stdin).lstrip(b" \t\r\n")
+        consumed_ws = len(self.stdin) - len(stripped)
+        pat = rb"[-+]?[0-9a-fA-F]+" if base == 16 else rb"[-+]?[0-9]+"
+        m = re.match(pat, stripped)
+        if not m:
+            self._ret(0)
+            return
+        try:
+            value = int(m.group(0), base)
+        except ValueError:
+            self._ret(0)
+            return
+        self.mu.mem_write(self._arg(1), (value & 0xFFFFFFFF).to_bytes(4, "little"))
+        self.stdin = self.stdin[consumed_ws + len(m.group(0)) :]
+        self._ret(1)
+
+    # glibc renames scanf to __isoc99_scanf in the import table (since the
+    # ISO C99 conversion semantics differ from the legacy symbol).
+    _lib___isoc99_scanf = _lib_scanf
