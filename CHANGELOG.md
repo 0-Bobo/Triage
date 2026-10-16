@@ -13,12 +13,13 @@ release.
   log) is generated via `POST /api/autopwn/writeup`, previewed inline in
   the Auto panel, and downloadable with a "Save Writeup" button. The CLI
   writes one to disk automatically on a successful solve.
-- **Sidebar icon set + app logo**: the 13 sidebar glyphs (previously
+- **Sidebar icon set + app logo**: the 13 sidebar glyphs, the Info panel's
+  empty-state strip, and the About panel's capabilities grid (previously
   ad-hoc Unicode characters) are now a consistent monochrome SVG
   line-icon set that inherits the existing hover/active color states. A
   gradient logo mark replaces the placeholder favicon/brand icon in the
-  titlebar, the Info panel's empty state, and `assets/logo.svg` for the
-  README.
+  titlebar, the Info panel's empty state, the About panel header, and
+  `assets/logo.svg` for the README.
 - **[`CONTEXT.md`](CONTEXT.md)**: newcomer-facing orientation map (what Triage is, the
   static-analysis/`autopwn` mental model, reading order, a "where to make
   a change" table, what's safe vs. load-bearing).
@@ -65,6 +66,14 @@ release.
   `_find_offset()` called `overflow_sites()` with an empty `known_calls`
   dict, so PLT-resolved call targets never matched names like `strcpy`
   against the unsafe-call list.
+- **`ret2win` crashed outright on any target that never reads stdin**
+  (its overflow comes from `argv` instead): the generated script's
+  `except EOFError` didn't catch `BrokenPipeError`, so `sendline()` on a
+  closed stdin took down the whole script with an unhandled traceback.
+  `ret2win` also now tries delivering the payload via `argv` as a
+  fallback when the stdin-based attempts find no flag (best-effort: a
+  single argv element can't carry a NUL byte, so a win address with one
+  can only be partially written).
 - **Uploaded binaries were staged non-executable**: `NamedTemporaryFile`
   defaults to `0600`, and the predictable-path staging copy preserved
   that mode, so any strategy that execs the target (`ret2win`, UAF,
