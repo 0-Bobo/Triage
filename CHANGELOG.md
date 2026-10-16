@@ -79,6 +79,16 @@ release.
   printed): the detail looked completely unrelated to the flag it reported.
   Now states explicitly when the flag was recovered from a post-run memory
   scan instead of from program output.
+- **The writeup's "Exploit" vs "Recovered parameters" heading was guessed
+  from the proof text's shape** (does it have a newline, does it start with
+  `import`), not from what the winning strategy actually did; the no-script
+  case was wrapped in a single backtick span regardless of strategy, the
+  same ugly one-liner whether it came from keygen, emulate, or brute. Now
+  keyed off the strategy's identity: `ret2win`/`z3`/`format_string`/`uaf`
+  get a real "## Exploit" code block, `smc` gets its decoded-image path
+  under its own heading, and everything else (keygen/emulate/brute — no
+  live process was ever attacked) gets a plain "## How the flag was found"
+  paragraph instead of a code-styled dump.
 - **Uploaded binaries were staged non-executable**: `NamedTemporaryFile`
   defaults to `0600`, and the predictable-path staging copy preserved
   that mode, so any strategy that execs the target (`ret2win`, UAF,
