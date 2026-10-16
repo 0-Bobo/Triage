@@ -2448,6 +2448,7 @@ dependencies = [
 [package.optional-dependencies]
 analysis = [
     { name = "angr" },
+    { name = "bitstring" },
     { name = "flare-capa" },
     { name = "keystone-engine" },
     { name = "lief" },
@@ -2474,6 +2475,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "angr", marker = "extra == 'analysis'", specifier = ">=9.2" },
+    { name = "bitstring", marker = "extra == 'analysis'", specifier = "<5" },
     { name = "capstone", specifier = ">=5.0" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "flare-capa", marker = "extra == 'analysis'", specifier = ">=7.0" },
