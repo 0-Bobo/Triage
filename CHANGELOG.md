@@ -7,6 +7,18 @@ release.
 ## [Unreleased]
 
 ### Added
+- **"Save Writeup"**: once autopwn solves a target, a Markdown writeup
+  (binary info, protections, the winning strategy and why it was chosen,
+  the exploit script or recovered parameters, the full strategy-attempt
+  log) is generated via `POST /api/autopwn/writeup`, previewed inline in
+  the Auto panel, and downloadable with a "Save Writeup" button. The CLI
+  writes one to disk automatically on a successful solve.
+- **Sidebar icon set + app logo**: the 13 sidebar glyphs (previously
+  ad-hoc Unicode characters) are now a consistent monochrome SVG
+  line-icon set that inherits the existing hover/active color states. A
+  gradient logo mark replaces the placeholder favicon/brand icon in the
+  titlebar, the Info panel's empty state, and `assets/logo.svg` for the
+  README.
 - **[`CONTEXT.md`](CONTEXT.md)**: newcomer-facing orientation map (what Triage is, the
   static-analysis/`autopwn` mental model, reading order, a "where to make
   a change" table, what's safe vs. load-bearing).
@@ -44,6 +56,20 @@ release.
   fast test path.
 
 ### Fixed
+- **`bitstring` 5.0 (a breaking rewrite that removed `ConstBitStream`)
+  silently broke every angr-backed strategy** once pip resolved it
+  unpinned via `pyvex`; pinned to `bitstring<5` in `pyproject.toml` and
+  `requirements-web.txt`.
+- **`ret2win`'s static offset-finding heuristic always found nothing** on
+  any target that didn't already get a hit from angr's symbolic search:
+  `_find_offset()` called `overflow_sites()` with an empty `known_calls`
+  dict, so PLT-resolved call targets never matched names like `strcpy`
+  against the unsafe-call list.
+- **Uploaded binaries were staged non-executable**: `NamedTemporaryFile`
+  defaults to `0600`, and the predictable-path staging copy preserved
+  that mode, so any strategy that execs the target (`ret2win`, UAF,
+  format-string) failed with "not marked as executable (+x)" for every
+  upload; binaries loaded by path were unaffected.
 - **Two independent whole-repo security review passes closed 10
   findings**: unquoted/mis-quoted shell interpolation in the autopwn
   WSL/POSIX bridge (CWE-78), no CSRF/Origin check on state-mutating
