@@ -19,7 +19,7 @@ pyelftools>=0.29             # ELF
 pefile>=2023.2.7             # PE
 
 # ── Optional analysis features ───────────────────────────────────────
-lief>=0.14                   # richer ELF/PE parsing, extra protections
+lief>=1.0.0                   # richer ELF/PE parsing, extra protections
 keystone-engine>=0.9.2       # assembler (patch/keypatch helpers)
 z3-solver>=4.12              # constraint solving; angr_* solver scripts
 angr>=9.2                    # symbolic execution solver scripts (heavy)
