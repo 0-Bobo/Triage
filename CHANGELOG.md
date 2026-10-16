@@ -20,6 +20,11 @@ release.
   gradient logo mark replaces the placeholder favicon/brand icon in the
   titlebar, the Info panel's empty state, the About panel header, and
   `assets/logo.svg` for the README.
+- **No-flag Auto Solve result gets the same visual treatment a solved run
+  does**, not just a muted status line: a bordered findings box lists what
+  each attempted strategy actually recovered, and "Save Writeup" is now
+  offered on a no-flag run too (the writeup already rendered this case
+  sensibly, it just wasn't reachable before).
 - **[`CONTEXT.md`](CONTEXT.md)**: newcomer-facing orientation map (what Triage is, the
   static-analysis/`autopwn` mental model, reading order, a "where to make
   a change" table, what's safe vs. load-bearing).
@@ -57,6 +62,38 @@ release.
   fast test path.
 
 ### Fixed
+- **A 9-strategy reliability audit (one agent per strategy, run in
+  parallel) found and closed real bugs in `angr`, `emulate`, and
+  `format_string`:**
+  - `angr` never used its own already-supported `use_argv=True` path,
+    so any target whose vulnerable code only runs when `argc > 1`
+    (argv-driven, not stdin) was unreachable under its default
+    stdin-only symbolic state. It now retries with symbolic argv when
+    the stdin attempt fails. Solves `samples/elf64_crackme` end to end
+    (a target `ret2win` genuinely cannot: its win address contains a
+    NUL byte that a single argv-delivered `strcpy` can't carry past,
+    confirmed live via `gdb`).
+  - `emulate`'s memory scan read the entire mapped image, including
+    the static `.rodata` image present from before execution even
+    starts, so any flag-shaped string literal "won" regardless of
+    whether the code path that prints it (e.g. a `win()`-only `puts()`)
+    ever actually ran. Verified live: a wrong key reported a solve.
+    Scan is now restricted to the harness's own heap/stack mappings.
+  - `strcmp`/`strncmp`/`memcmp`/`strcspn`/`scanf` were unmodeled in
+    `emulate`'s libc harness; the unmodeled-call fallback returns 0,
+    which `strcmp` callers read as "equal" (independently capable of
+    making a wrong password look correct) and which left `strcspn`
+    truncating input to empty and `scanf` never parsing anything at
+    all. All five are now modeled with real semantics.
+  - `format_string` crashed with an unhandled traceback on any
+    argv-only sink (the same `BrokenPipeError`-vs-`EOFError` bug class
+    the `ret2win` fix below addresses) - the existing test had
+    normalized the crash as a passing result instead of catching it as
+    a regression. Now tries argv as a fallback, with the right
+    exception handling; also found and fixed an overflow where the
+    default `%p` probe length collided with a bounded-copy sink
+    sharing the same buffer, discarding the leak before the crashing
+    process could flush it.
 - **`bitstring` 5.0 (a breaking rewrite that removed `ConstBitStream`)
   silently broke every angr-backed strategy** once pip resolved it
   unpinned via `pyvex`; pinned to `bitstring<5` in `pyproject.toml` and
