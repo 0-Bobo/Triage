@@ -55,7 +55,7 @@ uv sync --extra analysis --dev      # + symbolic/CAPA backends
   adds a golden-output regression test for it** (`tests/test_golden_recon.py`
   for the deterministic recon path; a checked-in fixture + expected artifact
   for strategy output). Check the real number any time with `make coverage-strat`
-  (report-only, no gate). Baseline at the time of writing: **71%** of the
+  (report-only, no gate). Baseline at the time of writing: **66%** of the
   strategy layer, `strat_brute` the weak point at ~26%.
 
 ## Before committing
