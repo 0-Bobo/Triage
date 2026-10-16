@@ -1421,10 +1421,21 @@ def api_autopwn_writeup(result: dict):
 @app.get("/favicon.ico")
 def favicon():
     svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
-        '<rect width="64" height="64" rx="8" fill="#0d1117"/>'
-        '<text x="32" y="44" font-family="monospace" font-size="36" font-weight="bold" '
-        'fill="#58a6ff" text-anchor="middle">T</text></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
+        "<defs>"
+        '<linearGradient id="rim" x1="55" y1="55" x2="450" y2="450" gradientUnits="userSpaceOnUse">'
+        '<stop stop-color="#20D7FF"/><stop offset=".27" stop-color="#2677FF"/>'
+        '<stop offset=".52" stop-color="#8B5CF6"/><stop offset=".76" stop-color="#FF3D71"/>'
+        '<stop offset="1" stop-color="#FFB52E"/></linearGradient>'
+        '<linearGradient id="glass" x1="90" y1="90" x2="420" y2="420" gradientUnits="userSpaceOnUse">'
+        '<stop stop-color="#171D29"/><stop offset="1" stop-color="#080B11"/></linearGradient>'
+        "</defs>"
+        '<rect x="54" y="54" width="404" height="404" rx="102" fill="url(#glass)" '
+        'stroke="url(#rim)" stroke-width="24"/>'
+        '<path d="M165 164 256 256 165 348" fill="none" stroke="#F4F7FB" stroke-width="30" '
+        'stroke-linecap="round" stroke-linejoin="round"/>'
+        '<path d="M270 358h83" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round"/>'
+        "</svg>"
     )
     return Response(content=svg, media_type="image/svg+xml")
 

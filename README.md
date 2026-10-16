@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" width="72" height="72" alt="Triage logo">
+
 # Triage
 
 [![CI](https://github.com/0-Bobo/Triage/actions/workflows/ci.yml/badge.svg)](https://github.com/0-Bobo/Triage/actions/workflows/ci.yml)

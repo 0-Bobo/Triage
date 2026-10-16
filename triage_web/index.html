@@ -171,8 +171,8 @@
     }
 
     .sidebar .logo-box svg {
-      width: 16px;
-      height: 16px;
+      width: 22px;
+      height: 22px;
     }
 
     .sidebar button {
@@ -200,6 +200,12 @@
       font-size: 12px;
       line-height: 1;
       opacity: .85;
+    }
+
+    .sidebar button .ico svg {
+      width: 16px;
+      height: 16px;
+      display: block;
     }
 
     .sidebar button .lbl {
@@ -259,10 +265,19 @@
     }
 
     .titlebar .logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       font-weight: 700;
       font-size: 13px;
       color: var(--text);
       letter-spacing: .5px;
+    }
+
+    .titlebar .logo svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
     }
 
     .titlebar .path {
@@ -1473,43 +1488,40 @@
     <!-- Sidebar -->
     <div class="sidebar">
       <div class="logo-box" title="Triage" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
-          <path d="M4 9V6a2 2 0 0 1 2-2h3" />
-          <path d="M15 4h3a2 2 0 0 1 2 2v3" />
-          <path d="M20 15v3a2 2 0 0 1-2 2h-3" />
-          <path d="M9 20H6a2 2 0 0 1-2-2v-3" />
-          <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+        <svg viewBox="0 0 512 512">
+          <defs>
+            <linearGradient id="logo-rim" x1="55" y1="55" x2="450" y2="450" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#20D7FF" /><stop offset=".27" stop-color="#2677FF" />
+              <stop offset=".52" stop-color="#8B5CF6" /><stop offset=".76" stop-color="#FF3D71" />
+              <stop offset="1" stop-color="#FFB52E" />
+            </linearGradient>
+            <linearGradient id="logo-glass" x1="90" y1="90" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#171D29" /><stop offset="1" stop-color="#080B11" />
+            </linearGradient>
+          </defs>
+          <rect x="54" y="54" width="404" height="404" rx="102" fill="url(#logo-glass)" stroke="url(#logo-rim)"
+            stroke-width="24" />
+          <path d="M165 164 256 256 165 348" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M270 358h83" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" />
         </svg>
       </div>
-      <button data-panel="auto" id="nav-auto" aria-label="Auto" title="Auto"><span
-          class="ico">&#9889;&#xFE0E;</span><span class="lbl">Auto</span></button>
+      <button data-panel="auto" id="nav-auto" aria-label="Auto" title="Auto"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 14.2 9.8 20.5 12l-6.3 2.2L12 20.5l-2.2-6.3L3.5 12l6.3-2.2L12 3.5Z"/><path d="M18.5 3.5v4M16.5 5.5h4"/><path d="M4 18.5h4M6 16.5v4"/></svg></span><span class="lbl">Auto</span></button>
       <div class="sep"></div>
-      <button class="active" data-panel="info" aria-label="Info" title="Info"><span class="ico">&#9881;</span><span
-          class="lbl">Info</span></button>
-      <button data-panel="functions" aria-label="Functions" title="Functions"><span class="ico">&#402;</span><span
-          class="lbl">Funcs</span></button>
-      <button data-panel="code" aria-label="Decompiled Code" title="Decompiled Code"><span
-          class="ico">{&#160;}</span><span class="lbl">Decomp</span></button>
-      <button data-panel="disasm" aria-label="Disassembly" title="Disassembly"><span class="ico">&#9776;</span><span
-          class="lbl">Asm</span></button>
-      <button data-panel="hex" aria-label="Hex Viewer" title="Hex Viewer"><span class="ico">#</span><span
-          class="lbl">Hex</span></button>
-      <button data-panel="imports" aria-label="Data" title="Data"><span class="ico">&larr;</span><span
-          class="lbl">Data</span></button>
+      <button class="active" data-panel="info" aria-label="Info" title="Info"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 10.8v5.1"/><path d="M12 7.7h.01" stroke-width="2.5"/></svg></span><span class="lbl">Info</span></button>
+      <button data-panel="functions" aria-label="Functions" title="Functions"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5H5.5v14H8"/><path d="M16 5h2.5v14H16"/><path d="M14.2 8.1c-2.7 0-3.8 1.6-3.8 4.4v5"/><path d="M9.4 12.5h4.1"/></svg></span><span class="lbl">Funcs</span></button>
+      <button data-panel="code" aria-label="Decompiled Code" title="Decompiled Code"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5-5 7 5 7"/><path d="m15 5 5 7-5 7"/><path d="m13.5 4-3 16"/></svg></span><span class="lbl">Decomp</span></button>
+      <button data-panel="disasm" aria-label="Disassembly" title="Disassembly"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h3.5M10 6.5h9"/><path d="M4 11.5h2M8.5 11.5H20"/><path d="M4 16.5h4.5M11 16.5h5.5"/><path d="m7.5 5.2 1 1.3-1 1.3M6 10.2l1 1.3-1 1.3M9 15.2l1 1.3-1 1.3"/></svg></span><span class="lbl">Asm</span></button>
+      <button data-panel="hex" aria-label="Hex Viewer" title="Hex Viewer"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="4" height="4" rx=".6"/><rect x="10" y="4" width="4" height="4" rx=".6"/><rect x="16" y="4" width="4" height="4" rx=".6"/><rect x="4" y="10" width="4" height="4" rx=".6"/><rect x="10" y="10" width="4" height="4" rx=".6"/><rect x="16" y="10" width="4" height="4" rx=".6"/><rect x="4" y="16" width="4" height="4" rx=".6"/><rect x="10" y="16" width="4" height="4" rx=".6"/><rect x="16" y="16" width="4" height="4" rx=".6"/></svg></span><span class="lbl">Hex</span></button>
+      <button data-panel="imports" aria-label="Data" title="Data"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.7"/><path d="M4.5 5.5v12.7c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V5.5"/><path d="M4.5 11.8c0 1.5 3.4 2.7 7.5 2.7s7.5-1.2 7.5-2.7"/></svg></span><span class="lbl">Data</span></button>
       <div class="sep"></div>
-      <button data-panel="exploit" aria-label="Exploit" title="Exploit"><span class="ico">!</span><span
-          class="lbl">Exploit</span></button>
-      <button data-panel="capa" aria-label="CAPA" title="CAPA"><span class="ico">C</span><span
-          class="lbl">CAPA</span></button>
-      <button data-panel="xrefs" aria-label="Cross References" title="Cross References"><span
-          class="ico">&#8596;</span><span class="lbl">XRef</span></button>
+      <button data-panel="exploit" aria-label="Exploit" title="Exploit"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.1"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/><path d="m17.2 6.8 2-2"/></svg></span><span class="lbl">Exploit</span></button>
+      <button data-panel="capa" aria-label="CAPA" title="CAPA"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V4.5h13l-2.2 3.2 2.2 3.2H5"/><path d="M8 7.7h4.5"/></svg></span><span class="lbl">CAPA</span></button>
+      <button data-panel="xrefs" aria-label="Cross References" title="Cross References"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="m7.1 11.2 9.7-4.3M7.1 12.8l9.7 4.3"/><path d="m14.9 5.8 2-.1-.4 2M14.9 18.2l2 .1-.4-2"/></svg></span><span class="lbl">XRef</span></button>
       <div class="spacer"></div>
-      <button onclick="quitServer()" aria-label="Quit" title="Quit"><span class="ico">&#10005;</span><span
-          class="lbl">Quit</span></button>
-      <button data-panel="status" aria-label="Status" title="Status"><span class="ico">&#9707;</span><span
-          class="lbl">Status</span></button>
-      <button data-panel="about" aria-label="About" title="About"><span class="ico">?</span><span
-          class="lbl">About</span></button>
+      <button onclick="quitServer()" aria-label="Quit" title="Quit"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.2a8 8 0 1 0 6 0"/><path d="M12 2.5v9"/></svg></span><span class="lbl">Quit</span></button>
+      <button data-panel="status" aria-label="Status" title="Status"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12h4l2.2-5 4.1 10 2.3-5h6.4"/></svg></span><span class="lbl">Status</span></button>
+      <button data-panel="about" aria-label="About" title="About"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.7 9a2.4 2.4 0 1 1 4.1 1.7c-1.2 1.1-1.8 1.4-1.8 3"/><path d="M12 17.3h.01" stroke-width="2.5"/></svg></span><span class="lbl">About</span></button>
     </div>
 
     <!-- Content area -->
@@ -1520,7 +1532,23 @@
         <span class="lights" aria-hidden="true"><span class="term-dot r"></span><span class="term-dot y"></span><span
             class="term-dot g"></span></span>
         <span class="dot" id="conn-dot" title="Connection status"></span>
-        <span class="logo">Triage</span>
+        <span class="logo"><svg viewBox="0 0 512 512" aria-hidden="true">
+            <defs>
+              <linearGradient id="titlebar-rim" x1="55" y1="55" x2="450" y2="450" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#20D7FF" /><stop offset=".27" stop-color="#2677FF" />
+                <stop offset=".52" stop-color="#8B5CF6" /><stop offset=".76" stop-color="#FF3D71" />
+                <stop offset="1" stop-color="#FFB52E" />
+              </linearGradient>
+              <linearGradient id="titlebar-glass" x1="90" y1="90" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#171D29" /><stop offset="1" stop-color="#080B11" />
+              </linearGradient>
+            </defs>
+            <rect x="54" y="54" width="404" height="404" rx="102" fill="url(#titlebar-glass)"
+              stroke="url(#titlebar-rim)" stroke-width="24" />
+            <path d="M165 164 256 256 165 348" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <path d="M270 358h83" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" />
+          </svg>Triage</span>
         <span class="path" id="header-path">- no binary loaded<span class="tcursor"></span></span>
         <div style="flex:1"></div>
         <button class="btn" onclick="document.getElementById('file-input').click()">Open</button>
@@ -1544,13 +1572,22 @@
         <div class="panel active" id="panel-info">
           <div id="info-empty" class="empty-state">
             <div class="empty-hero-card">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"
-                stroke-linecap="square" aria-hidden="true">
-                <path d="M4 9V6a2 2 0 0 1 2-2h3" />
-                <path d="M15 4h3a2 2 0 0 1 2 2v3" />
-                <path d="M20 15v3a2 2 0 0 1-2 2h-3" />
-                <path d="M9 20H6a2 2 0 0 1-2-2v-3" />
-                <circle cx="12" cy="12" r="1.6" fill="var(--accent)" stroke="none" />
+              <svg width="40" height="40" viewBox="0 0 512 512" aria-hidden="true">
+                <defs>
+                  <linearGradient id="hero-rim" x1="55" y1="55" x2="450" y2="450" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#20D7FF" /><stop offset=".27" stop-color="#2677FF" />
+                    <stop offset=".52" stop-color="#8B5CF6" /><stop offset=".76" stop-color="#FF3D71" />
+                    <stop offset="1" stop-color="#FFB52E" />
+                  </linearGradient>
+                  <linearGradient id="hero-glass" x1="90" y1="90" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#171D29" /><stop offset="1" stop-color="#080B11" />
+                  </linearGradient>
+                </defs>
+                <rect x="54" y="54" width="404" height="404" rx="102" fill="url(#hero-glass)"
+                  stroke="url(#hero-rim)" stroke-width="24" />
+                <path d="M165 164 256 256 165 348" fill="none" stroke="#F4F7FB" stroke-width="30"
+                  stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M270 358h83" fill="none" stroke="#F4F7FB" stroke-width="30" stroke-linecap="round" />
               </svg>
               <div class="empty-hero-title">Triage</div>
               <div class="empty-hero-tagline">A local binary-analysis workbench for CTF reverse-engineering and pwn:
