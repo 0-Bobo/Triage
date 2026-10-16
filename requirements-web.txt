@@ -15,7 +15,7 @@ python-multipart>=0.0.9      # FastAPI form/file upload parsing
 capstone>=5.0                # disassembly engine (hard requirement)
 
 # ── Binary parsing (install at least one; both recommended) ───────────
-pyelftools>=0.29             # ELF
+pyelftools>=0.33             # ELF
 pefile>=2023.2.7             # PE
 
 # ── Optional analysis features ───────────────────────────────────────

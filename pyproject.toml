@@ -11,7 +11,7 @@ dependencies = [
   "uvicorn>=0.27",
   "python-multipart>=0.0.9",
   "capstone>=5.0",
-  "pyelftools>=0.29",
+  "pyelftools>=0.33",
   "pefile>=2023.2.7",
 ]
 
