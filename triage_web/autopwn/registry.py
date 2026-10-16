@@ -274,7 +274,17 @@ def _run_emulate(ctx: RunCtx) -> Attempt:
     from triage_web.autopwn.strat_emulate import emulate_for_flag
 
     r = emulate_for_flag(ctx.path, flag_pattern=ctx.flag_pattern)
-    finding = f"stdout={r.stdout[:120]!r}" if r.stdout else None
+    if r.flag and r.flag.encode() not in r.stdout:
+        # The flag never reached stdout at all (e.g. built into a stack/heap
+        # buffer but never printed) — it was recovered by scanning the
+        # emulated process's writable memory after running the function, not
+        # from anything the program said. Say that explicitly instead of
+        # showing an unrelated stdout line.
+        finding = f"flag recovered from emulated memory, never printed to stdout (stdout={r.stdout[:120]!r})"
+    elif r.stdout:
+        finding = f"stdout={r.stdout[:120]!r}"
+    else:
+        finding = None
     return Attempt("emulate", r.ok, 0.0, _detail(finding, r.reason), r.flag)
 
 

@@ -1283,6 +1283,49 @@ def test_run_emulate_composes_the_captured_stdout_with_the_no_flag_reason(monkey
     assert "no flag in output or memory after emulation" in att.detail
 
 
+def test_run_emulate_says_the_flag_came_from_memory_not_stdout(monkeypatch, autopwn_samples):
+    # Regression: a flag built into a buffer but never printed used to show
+    # the (unrelated) captured stdout in the writeup/proof, with no mention
+    # that the flag actually came from a post-run memory scan.
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_emulate
+
+    monkeypatch.setattr(
+        strat_emulate,
+        "emulate_for_flag",
+        lambda *a, **k: strat_emulate.EmulateResult(
+            ok=True,
+            flag="flag{MEMbuilt_42}",
+            stdout=b"nothing to see here\n",
+            memory_hits=["flag{MEMbuilt_42}"],
+        ),
+    )
+    att = ap._run_strategy("emulate", str(autopwn_samples["memflag"]), None, 30)
+    assert att.ok and att.flag == "flag{MEMbuilt_42}"
+    assert "recovered from emulated memory" in att.detail
+    assert "never printed to stdout" in att.detail
+    assert "nothing to see here" in att.detail  # still shown, for context
+
+
+def test_run_emulate_shows_stdout_when_the_flag_was_actually_printed(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_emulate
+
+    monkeypatch.setattr(
+        strat_emulate,
+        "emulate_for_flag",
+        lambda *a, **k: strat_emulate.EmulateResult(
+            ok=True,
+            flag="flag{printed}",
+            stdout=b"key: nope, wrong key\nflag{printed}\n",
+        ),
+    )
+    att = ap._run_strategy("emulate", str(autopwn_samples["memflag"]), None, 30)
+    assert att.ok and att.flag == "flag{printed}"
+    assert "recovered from emulated memory" not in att.detail
+    assert "stdout=" in att.detail and "flag{printed}" in att.detail
+
+
 def test_run_emulate_falls_back_to_reason_when_no_stdout_was_captured(monkeypatch, autopwn_samples):
     import triage_web.autopwn as ap
     from triage_web.autopwn import strat_emulate
