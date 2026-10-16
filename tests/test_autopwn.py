@@ -137,6 +137,19 @@ def test_z3_solves_a_constant_compare_guard(autopwn_samples):
     assert r.win == "win" and "process(" in r.script
 
 
+@pytest.mark.slow
+def test_brute_solves_a_short_digit_pin(autopwn_samples):
+    # Closes a gap an earlier audit found: brute had solid unit-level
+    # scoring/oracle tests but no real compiled binary proving the
+    # short-digit-keyspace success path (mode 2) actually recovers a flag
+    # end to end, as opposed to correctly declining on an unsuitable target
+    # (already covered by the keycheck "no usable signal" case).
+    from triage_web.autopwn.strat_brute import solve_brute
+
+    r = solve_brute(str(autopwn_samples["brute_pin"]), timeout=90)
+    assert r.ok and r.key == "42" and r.flag == "flag{brute_42}"
+
+
 def test_brute_reports_cleanly_without_a_runtime(monkeypatch, autopwn_samples):
     from triage_web.autopwn import strat_brute
 
@@ -227,6 +240,18 @@ def test_registry_scorers_return_none_when_inapplicable():
 
 
 # ── self-modifying-code strategy ─────────────────────────────────────
+
+
+@pytest.mark.slow
+def test_smc_solves_a_real_self_decoding_payload(autopwn_samples):
+    # Closes a gap an earlier audit found: smc had solid unit-level
+    # transform/repair tests against synthetic byte fixtures, but no real
+    # compiled binary proving the full recon -> classify -> smc -> flag
+    # pipeline against an actual RWE self-decoding segment.
+    from triage_web.autopwn.strat_smc import solve_smc
+
+    r = solve_smc(str(autopwn_samples["smc"]), timeout=30)
+    assert r.ok and r.flag == "flag{smc_unwrapped}"
 
 
 def test_smc_transform_family_recovers_the_reference_decoder(autopwn_samples):

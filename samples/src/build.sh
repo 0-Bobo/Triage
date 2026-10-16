@@ -31,6 +31,8 @@ gcc -O0 -fno-stack-protector -no-pie -o "$out/memflag"  memflag.c
 gcc -O0 -fno-stack-protector -no-pie -o "$out/ret2win"  ret2win.c
 gcc -O0 -fno-stack-protector -no-pie -o "$out/keycheck" keycheck.c
 gcc -O0 -fno-stack-protector -no-pie -o "$out/keygate"  keygate.c
+gcc -O0 -fno-stack-protector -no-pie -o "$out/brute_pin" brute_pin.c
+gcc -no-pie -nostdlib -O0 -Wl,-N -o "$out/smc" smc.S
 
 # Windows PE fixtures need a MinGW cross-compiler and are rebuilt manually:
 #   x86_64-w64-mingw32-gcc -o ../pe64_hello.exe pe_hello.c

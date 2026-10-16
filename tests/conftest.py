@@ -60,12 +60,15 @@ def vuln_samples() -> dict[str, Path]:
 @pytest.fixture(scope="session")
 def autopwn_samples() -> dict[str, Path]:
     """Deterministic targets for the auto-solver (sources in samples/src):
-    memflag   x86-64 ELF, builds `flag{MEMbuilt_42}` in a heap buffer, prints nothing
-    ret2win   x86-64 ELF, `read()` overflow + win() that puts a flag
-    keycheck  x86-64 ELF, fgets + strcmp against "sup3rs3cr3t", prints the flag on match
-    keygate   x86-64 ELF, `scanf("%x")` guarded by `k == 0xdeadbeef` → win()
+    memflag    x86-64 ELF, builds `flag{MEMbuilt_42}` in a heap buffer, prints nothing
+    ret2win    x86-64 ELF, `read()` overflow + win() that puts a flag
+    keycheck   x86-64 ELF, fgets + strcmp against "sup3rs3cr3t", prints the flag on match
+    keygate    x86-64 ELF, `scanf("%x")` guarded by `k == 0xdeadbeef` → win()
+    brute_pin  x86-64 ELF, `scanf("%d")` guarded by `pin == 42` → prints the flag
+    smc        x86-64 ELF, raw asm; XOR-0x5a-decodes a payload in an RWE segment at _start
+               and jumps into it, which prints the flag via a raw syscall
     """
-    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate")}
+    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate", "brute_pin", "smc")}
 
 
 @pytest.fixture
