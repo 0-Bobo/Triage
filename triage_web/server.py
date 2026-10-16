@@ -407,6 +407,10 @@ async def api_load(path: str = Form(""), file: UploadFile = File(None)):
                 raise HTTPException(413, f"Upload exceeds the {_MAX_UPLOAD_BYTES}-byte limit")
             tmp.write(chunk)
         tmp.close()
+        # Autopwn strategies that exec the target (ret2win, UAF, format-string)
+        # need +x; NamedTemporaryFile defaults to 0600, and shutil.copy2 below
+        # preserves whatever mode is set here onto the staged copy too.
+        os.chmod(tmp.name, 0o700)
         target = tmp.name
         original_name = file.filename
         # Copy to a predictable path so solver scripts can reference the file

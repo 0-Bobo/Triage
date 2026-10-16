@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 import threading
 
 import pytest
@@ -129,6 +130,18 @@ def test_load_via_file_upload(app_client: TestClient, sample_path) -> None:
     assert r.status_code == 200
     assert r.json()["filename"] == "upload.bin"
     assert server._session.loader is not None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX executable bit only")
+def test_uploaded_binary_is_staged_executable(app_client: TestClient, sample_path) -> None:
+    # Regression: NamedTemporaryFile defaults to 0600, and the staged copy
+    # (shutil.copy2) preserved that, so autopwn strategies that exec the
+    # target (ret2win, UAF, format-string) failed with "not marked as
+    # executable (+x)" on every uploaded (as opposed to load-by-path) target.
+    with open(sample_path, "rb") as fh:
+        r = app_client.post("/api/load", files={"file": ("upload.bin", fh, "application/octet-stream")})
+    assert r.status_code == 200
+    assert os.access(server._session.path, os.X_OK)
 
 
 # ── /api/unload ───────────────────────────────────────────────────────
