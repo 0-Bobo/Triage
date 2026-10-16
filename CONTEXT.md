@@ -1,6 +1,6 @@
 ## Context
 
-A fast orientation for anyone (human or agent) new to this repo. `README.md`
+A fast orientation for anyone new to this repo. `README.md`
 is the pitch and quick start; `ARCHITECTURE.md` is the detailed technical
 walkthrough. This page is the map between them: what Triage actually is,
 how the pieces fit, and where to look first for a given kind of change.
