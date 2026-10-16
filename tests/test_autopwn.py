@@ -539,6 +539,18 @@ def test_ret2win_emits_a_script_and_finds_the_win_and_offset(autopwn_samples):
         assert r.ok and r.flag == "flag{ret2win_reached}"
 
 
+def test_ret2win_offset_heuristic_resolves_plt_names_on_a_statically_linked_sink(crackme_path):
+    # Regression: _find_offset's overflow_sites() call used to pass an empty
+    # known_calls dict, so PLT targets never resolved to names like "strcpy"
+    # and the VULN_BOF match always missed, on any target that doesn't
+    # already find a win address via angr's symbolic offset search.
+    from triage_web.autopwn.strat_ret2win import solve_ret2win
+
+    r = solve_ret2win(str(crackme_path), timeout=30)
+    assert r.win == "win"
+    assert r.offset == 40
+
+
 def test_ret2win_gives_up_cleanly_without_a_win_function(autopwn_samples):
     from triage_web.autopwn.strat_ret2win import solve_ret2win
 

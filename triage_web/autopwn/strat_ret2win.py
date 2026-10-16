@@ -18,7 +18,7 @@ from __future__ import annotations
 import textwrap
 from dataclasses import dataclass, field
 
-from triage_web.analysis import find_win_functions, overflow_sites
+from triage_web.analysis import build_known_calls, find_win_functions, overflow_sites
 from triage_web.autopwn.runner import extract_flags, run_path, run_script, target_kind
 from triage_web.engine import Disassembler
 from triage_web.loader import BinaryLoader
@@ -139,7 +139,7 @@ def _find_offset(path, ldr, disasm, log) -> int | None:
         except Exception as exc:  # pragma: no cover - angr edge cases
             log.append(f"symbolic offset failed: {exc}")
 
-    sites = overflow_sites(ldr, disasm, {}, ldr.get_info()["bits"] == 64)
+    sites = overflow_sites(ldr, disasm, build_known_calls(ldr), ldr.get_info()["bits"] == 64)
     if sites:
         est = sites[0].get("est_offset_to_ret")
         if est:
