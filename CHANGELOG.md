@@ -74,6 +74,11 @@ release.
   fallback when the stdin-based attempts find no flag (best-effort: a
   single argv element can't carry a NUL byte, so a win address with one
   can only be partially written).
+- **`emulate`'s writeup/proof text showed the captured stdout even when the
+  flag never appeared in it** (e.g. a flag built into a buffer but never
+  printed): the detail looked completely unrelated to the flag it reported.
+  Now states explicitly when the flag was recovered from a post-run memory
+  scan instead of from program output.
 - **Uploaded binaries were staged non-executable**: `NamedTemporaryFile`
   defaults to `0600`, and the predictable-path staging copy preserved
   that mode, so any strategy that execs the target (`ret2win`, UAF,
