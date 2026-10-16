@@ -10,6 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Strategies that produce a real, runnable exploit script. Everything else
+# finds the flag by analyzing or simulating the binary (no live process was
+# attacked), so there's no script to show — gated on strategy identity, not
+# guessed from the proof text's shape.
+_SCRIPT_STRATEGIES = {"ret2win", "z3", "format_string", "uaf"}
+
 
 def generate_writeup(result: dict) -> str:
     """Render ``result`` (an ``asdict(SolveResult)``-shaped dict) as Markdown."""
@@ -38,13 +44,21 @@ def generate_writeup(result: dict) -> str:
     if winner_plan and winner_plan.get("why"):
         lines += ["## Why this strategy", "", winner_plan["why"], ""]
 
-    script = (result.get("proof") or "").rstrip()
-    if script:
-        is_script = "\n" in script or script.lstrip().startswith(("import ", "from ", "#!"))
-        lines.append("## Exploit" if is_script else "## Recovered parameters")
-        lines.append("")
-        lines += ["```python", script, "```"] if is_script else [f"`{script}`"]
-        lines.append("")
+    proof = (result.get("proof") or "").rstrip()
+    strategy = result.get("strategy")
+    if proof:
+        if strategy in _SCRIPT_STRATEGIES:
+            lines += ["## Exploit", "", "```python", proof, "```", ""]
+        elif strategy == "smc":
+            lines += [
+                "## Decoded image",
+                "",
+                "The self-modifying-code layer was statically decoded (header repair, "
+                f"stub-derived unwrap) without ever executing the target: `{proof}`.",
+                "",
+            ]
+        else:
+            lines += ["## How the flag was found", "", proof, ""]
 
     attempts = result.get("attempts") or []
     if attempts:

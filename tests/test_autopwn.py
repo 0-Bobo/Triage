@@ -1417,7 +1417,12 @@ def test_generate_writeup_renders_a_successful_script_based_solve():
     assert "| ret2win | flag |" in md
 
 
-def test_generate_writeup_renders_recovered_parameters_without_a_script():
+def test_generate_writeup_explains_how_the_flag_was_found_without_a_script():
+    # keygen/emulate/brute solve by analyzing or simulating the binary, not by
+    # attacking a live process — there's no exploit script to show, so this
+    # should read as an explanation, not the old "## Recovered parameters"
+    # single-line code-block dump (which looked identical for every
+    # no-script strategy regardless of what it actually did).
     from triage_web.autopwn.writeup import generate_writeup
 
     result = {
@@ -1431,9 +1436,30 @@ def test_generate_writeup_renders_recovered_parameters_without_a_script():
         "recon": {},
     }
     md = generate_writeup(result)
-    assert "## Recovered parameters" in md
+    assert "## How the flag was found" in md
+    assert "## Exploit" not in md
     assert "```python" not in md
     assert "key='deadbeef'" in md
+
+
+def test_generate_writeup_describes_the_decoded_image_for_smc():
+    from triage_web.autopwn.writeup import generate_writeup
+
+    result = {
+        "path": "/ctf/samples/packed",
+        "success": True,
+        "flag": "flag{unwrapped}",
+        "strategy": "smc",
+        "seconds": 0.5,
+        "proof": "/ctf/triage_smc_abcdef.elf",
+        "attempts": [],
+        "recon": {},
+    }
+    md = generate_writeup(result)
+    assert "## Decoded image" in md
+    assert "## Exploit" not in md
+    assert "statically decoded" in md
+    assert "/ctf/triage_smc_abcdef.elf" in md
 
 
 def test_generate_writeup_renders_a_no_flag_run():
