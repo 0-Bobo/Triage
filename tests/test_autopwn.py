@@ -718,13 +718,29 @@ def test_cli_recon(capsys, autopwn_samples):
     assert "plan:" in out and "emulate" in out
 
 
-def test_cli_solve_json(capsys, autopwn_samples):
-    from triage_web.autopwn.__main__ import main
+def test_cli_solve_json(capsys, tmp_path, monkeypatch, autopwn_samples):
+    import triage_web.autopwn.__main__ as cli
 
-    rc = main([str(autopwn_samples["memflag"]), "--json", "--budget", "40"])
+    # a real solve writes its writeup next to the target by default; redirect
+    # it into tmp_path so this test doesn't drop a file into tracked samples/
+    monkeypatch.setattr(cli, "default_writeup_path", lambda result: tmp_path / "out-writeup.md")
+
+    rc = cli.main([str(autopwn_samples["memflag"]), "--json", "--budget", "40"])
     payload = json.loads(capsys.readouterr().out)
     assert rc == 0
     assert payload["success"] and payload["flag"] == "flag{MEMbuilt_42}"
+    assert (tmp_path / "out-writeup.md").exists()
+    assert "flag{MEMbuilt_42}" in (tmp_path / "out-writeup.md").read_text()
+
+
+def test_cli_solve_prints_the_writeup_path_on_success(capsys, tmp_path, monkeypatch, autopwn_samples):
+    import triage_web.autopwn.__main__ as cli
+
+    monkeypatch.setattr(cli, "default_writeup_path", lambda result: tmp_path / "out-writeup.md")
+    rc = cli.main([str(autopwn_samples["memflag"]), "--budget", "40"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert f"writeup: {tmp_path / 'out-writeup.md'}" in out
 
 
 def test_cli_reports_failure_detail(capsys, tmp_path):
@@ -1296,6 +1312,88 @@ def test_solveresult_summary_both_ways():
     assert bad.summary().startswith("[-]") and "everything failed" in bad.summary()
 
 
+def test_generate_writeup_renders_a_successful_script_based_solve():
+    from triage_web.autopwn.writeup import generate_writeup
+
+    result = {
+        "path": "/ctf/samples/ret2win",
+        "success": True,
+        "flag": "flag{ret2win}",
+        "strategy": "ret2win",
+        "seconds": 1.4,
+        "proof": "from pwn import *\np = process('./ret2win')\np.sendline(b'A' * 40)\n",
+        "attempts": [
+            {"strategy": "ret2win", "ok": True, "detail": "win=win@0x401176", "flag": "flag{ret2win}"},
+        ],
+        "notes": "",
+        "recon": {
+            "arch": "x86_64",
+            "bits": 64,
+            "format": "ELF",
+            "protections": {"nx": "enabled", "pie": "disabled"},
+            "plans": [{"name": "ret2win", "score": 80, "why": "win-style function + overflow sink"}],
+        },
+    }
+    md = generate_writeup(result)
+    assert md.startswith("# ret2win: autopwn writeup\n")
+    assert "`flag{ret2win}`" in md
+    assert "Winning strategy: `ret2win`" in md
+    assert "x86_64 64-bit ELF" in md
+    assert "nx enabled" in md
+    assert "win-style function + overflow sink" in md
+    assert "```python" in md and "p.sendline" in md
+    assert "| ret2win | flag |" in md
+
+
+def test_generate_writeup_renders_recovered_parameters_without_a_script():
+    from triage_web.autopwn.writeup import generate_writeup
+
+    result = {
+        "path": "/ctf/samples/keygate",
+        "success": True,
+        "flag": "flag{keygate}",
+        "strategy": "keygen",
+        "seconds": 0.3,
+        "proof": "key='deadbeef' -> win @ 0x401176",
+        "attempts": [],
+        "recon": {},
+    }
+    md = generate_writeup(result)
+    assert "## Recovered parameters" in md
+    assert "```python" not in md
+    assert "key='deadbeef'" in md
+
+
+def test_generate_writeup_renders_a_no_flag_run():
+    from triage_web.autopwn.writeup import generate_writeup
+
+    result = {
+        "path": "/ctf/samples/unsolved",
+        "success": False,
+        "flag": None,
+        "strategy": None,
+        "seconds": 12.0,
+        "proof": "",
+        "attempts": [{"strategy": "angr", "ok": False, "detail": "no success state reached", "flag": None}],
+        "notes": "angr: no success state reached",
+        "recon": {},
+    }
+    md = generate_writeup(result)
+    assert "Solved: no" in md
+    assert "`flag{" not in md
+    assert "## Exploit" not in md
+    assert "| angr | no flag |" in md
+    assert "angr: no success state reached" in md
+
+
+def test_default_writeup_path_sits_next_to_the_target():
+    from triage_web.autopwn.writeup import default_writeup_path
+
+    p = default_writeup_path({"path": "/ctf/samples/ret2win"})
+    assert p.name == "ret2win-writeup.md"
+    assert p.parent.name == "samples"
+
+
 def test_solve_time_budget_skips_later_strategies(monkeypatch, autopwn_samples):
     import triage_web.autopwn as ap
 
@@ -1422,6 +1520,28 @@ def test_api_autopwn_recon_and_solve(autopwn_samples):
     assert body["success"] and body["flag"] == "flag{MEMbuilt_42}"
     assert body["strategy"] == "emulate"
     assert body["attempts"][0]["strategy"] == "emulate"
+
+    writeup = c.post("/api/autopwn/writeup", json=body).json()["markdown"]
+    assert "flag{MEMbuilt_42}" in writeup
+    assert "Winning strategy: `emulate`" in writeup
+
+
+def test_api_autopwn_writeup_is_pure_formatting_no_binary_needed():
+    c = TestClient(server.app)
+    result = {
+        "path": "/x/unsolved",
+        "success": False,
+        "flag": None,
+        "strategy": None,
+        "seconds": 1.0,
+        "proof": "",
+        "attempts": [],
+        "notes": "every strategy exhausted",
+        "recon": {},
+    }
+    md = c.post("/api/autopwn/writeup", json=result).json()["markdown"]
+    assert "Solved: no" in md
+    assert "every strategy exhausted" in md
 
 
 def test_api_autopwn_stream_emits_sse_progress(autopwn_samples):

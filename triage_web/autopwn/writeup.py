@@ -1,0 +1,67 @@
+"""Render a solved (or attempted) target into a standalone Markdown writeup.
+
+Takes the same dict shape ``solve()`` already returns (``asdict(SolveResult)``,
+the shape the web UI's SSE ``done`` event and ``POST /api/autopwn`` both send) -
+no extra run, no extra state. One function, reused by the CLI's auto-write-on-
+solve and the web UI's "Save Writeup" button via ``POST /api/autopwn/writeup``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def generate_writeup(result: dict) -> str:
+    """Render ``result`` (an ``asdict(SolveResult)``-shaped dict) as Markdown."""
+    recon = result.get("recon") or {}
+    name = Path(result.get("path", "target")).name
+    lines: list[str] = [f"# {name}: autopwn writeup", ""]
+
+    lines.append(f"- Binary: `{result.get('path', '?')}`")
+    if recon.get("format"):
+        lines.append(f"- Format: {recon.get('arch', '?')} {recon.get('bits', '?')}-bit {recon.get('format', '?')}")
+    protections = recon.get("protections") or {}
+    if protections:
+        lines.append("- Protections: " + ", ".join(f"{k} {v}" for k, v in protections.items()))
+
+    success = bool(result.get("success"))
+    seconds = result.get("seconds", 0)
+    if success:
+        lines.append(f"- Flag: `{result.get('flag')}`")
+        lines.append(f"- Winning strategy: `{result.get('strategy')}` in {seconds}s")
+    else:
+        lines.append(f"- Solved: no (every strategy exhausted in {seconds}s)")
+    lines.append("")
+
+    plans = recon.get("plans") or []
+    winner_plan = next((p for p in plans if p.get("name") == result.get("strategy")), None)
+    if winner_plan and winner_plan.get("why"):
+        lines += ["## Why this strategy", "", winner_plan["why"], ""]
+
+    script = (result.get("proof") or "").rstrip()
+    if script:
+        is_script = "\n" in script or script.lstrip().startswith(("import ", "from ", "#!"))
+        lines.append("## Exploit" if is_script else "## Recovered parameters")
+        lines.append("")
+        lines += ["```python", script, "```"] if is_script else [f"`{script}`"]
+        lines.append("")
+
+    attempts = result.get("attempts") or []
+    if attempts:
+        lines += ["## Strategy log", "", "| strategy | result | detail |", "|---|---|---|"]
+        for a in attempts:
+            outcome = "flag" if a.get("flag") else ("ok" if a.get("ok") else "no flag")
+            detail = (a.get("detail") or "").replace("|", "\\|").replace("\n", " ")
+            lines.append(f"| {a.get('strategy', '?')} | {outcome} | {detail} |")
+        lines.append("")
+
+    if result.get("notes"):
+        lines += ["## Notes", "", result["notes"], ""]
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def default_writeup_path(result: dict) -> Path:
+    """Where the CLI drops the writeup: next to the target, `<stem>-writeup.md`."""
+    target = Path(result.get("path", "target"))
+    return target.with_name(f"{target.stem}-writeup.md")
