@@ -18,6 +18,17 @@ the harder ones the ranked plan and the parameters are the point.
 
 The UI is a single `index.html` (markup, inline JS, inline styles, embedded fonts), no build step, no bundler.
 
+## Documentation
+
+- [`CONTEXT.md`](CONTEXT.md): orientation map, reading order, where to make a change.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): directory-by-directory reference, request flow, coverage contract.
+- [`ENGINEERING.md`](ENGINEERING.md): why six specific subsystems (the two
+  decompilers, anti-disassembly handling, autopwn's strategy registry, the
+  sandbox, WSL routing, a real bug and how it was found) are built the way
+  they are.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): dev setup, PR expectations.
+- [`SECURITY.md`](SECURITY.md): the threat model.
+
 ## Quick start
 
 Needs Python 3.12 or newer. [uv](https://docs.astral.sh/uv/) is the easiest way
@@ -171,7 +182,7 @@ autopwn's `angr`/`z3`/`emulate` strategies to run at all, those three need a
 no WSL fallback for code that runs inside this server's own process.
 
 ELF targets and every generated script are additionally sandboxed (`bwrap`
-if available, else `unshare`); see `ARCHITECTURE.md` for the isolation
+if available, else `unshare`); see [`ARCHITECTURE.md`](ARCHITECTURE.md) for the isolation
 details and `TRIAGE_SANDBOX` override.
 
 ## Layout
@@ -189,10 +200,7 @@ tests/                   pytest suite plus the golden-recon fixtures
 samples/                 small purpose-built test binaries and their C source
 ```
 
-`ARCHITECTURE.md` has the full walkthrough. `ENGINEERING.md` goes deeper on
-why six specific pieces (the two decompilers, the anti-disassembly
-handling, autopwn's strategy registry, the sandbox, the WSL routing, and a
-real bug and how it was actually found) are built the way they are.
+See [Documentation](#documentation) above for the full walkthrough and the engineering deep-dive.
 
 ## Development
 

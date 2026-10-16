@@ -7,10 +7,10 @@ release.
 ## [Unreleased]
 
 ### Added
-- **`CONTEXT.md`**: newcomer-facing orientation map (what Triage is, the
+- **[`CONTEXT.md`](CONTEXT.md)**: newcomer-facing orientation map (what Triage is, the
   static-analysis/`autopwn` mental model, reading order, a "where to make
   a change" table, what's safe vs. load-bearing).
-- **`SECURITY.md`**: explicit threat model (unauthenticated local file
+- **[`SECURITY.md`](SECURITY.md)**: explicit threat model (unauthenticated local file
   read + unauthenticated arbitrary code execution, by design, for a
   single-user local tool) and a private disclosure channel.
 - **`.github/ISSUE_TEMPLATE/`**: bug report + feature request templates.
@@ -22,7 +22,7 @@ release.
 - **`--i-understand-the-network-risk`**: required alongside any
   non-loopback `--host`; the server now refuses to start without it
   instead of just printing a warning.
-- **`ARCHITECTURE.md`**, cold-start orientation map: the web request flow, the
+- **[`ARCHITECTURE.md`](ARCHITECTURE.md)**, cold-start orientation map: the web request flow, the
   unwired p-code decompiler pipeline, the `autopwn`
   recon → classify → registry → strategy flow, the strategy catalog, the
   coverage contract, tooling, and known gotchas.
@@ -97,7 +97,7 @@ release.
   "size to next function boundary" blocks now call it.
 - **`index.html`**: removed a dead `.tab-bar` / `.tab` CSS block + its inert
   click handler + an empty init IIFE. No visual change.
-- **`CONTRIBUTING.md`**: `autopwn` is documented as a *recon + first-move
+- **[`CONTRIBUTING.md`](CONTRIBUTING.md)**: `autopwn` is documented as a *recon + first-move
   accelerator*: a strategy *surfaces / ranks / recovers parameters*, it does not
   "solve end to end". A `strat_*` file joins the coverage `omit` list only
   alongside a golden-output test for it.

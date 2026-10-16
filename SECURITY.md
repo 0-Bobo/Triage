@@ -50,7 +50,7 @@ changelog entry unless you'd rather stay anonymous.
   the threat model above, not a bug.
 - A generated exploit script failing to pop a shell on a target binary.
   `autopwn`/the solver generators are a recon + first-move accelerator,
-  not a guaranteed exploit, see `ARCHITECTURE.md`.
+  not a guaranteed exploit, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - A dependency (angr, pwntools, capstone, flare-capa, ...) having its own
   known CVE. Report those upstream; `pip-audit` already tracks them here
   (see `.github/workflows/ci.yml`).

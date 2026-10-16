@@ -1,6 +1,6 @@
 # Engineering notes
 
-`ARCHITECTURE.md` is the map: what lives where. This is the other half: why
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the map: what lives where. This is the other half: why
 the pieces that matter are built the way they are, including the paths that
 were tried and dropped. Six subsystems, each picked because it involved a
 real decision with a real alternative, not because it was the biggest file.

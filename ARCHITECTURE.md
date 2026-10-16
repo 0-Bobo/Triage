@@ -5,7 +5,7 @@ Ghidra-style pseudo-C decompilation, cross-references, ROP gadgets, vulnerabilit
 hints, capa capabilities, and an `autopwn` subsystem that classifies the target
 and runs solver strategies in priority order.
 
-The orientation map for picking the repo up cold; read it after the README. For *what changed when*, read `CHANGELOG.md`.
+The orientation map for picking the repo up cold; read it after the README. For *what changed when*, read [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
