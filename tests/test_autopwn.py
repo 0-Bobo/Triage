@@ -1219,6 +1219,74 @@ def test_run_brute_composes_the_recovered_prefix_with_the_no_flag_reason(monkeyp
     assert "recovered a likely prefix" in att.detail
 
 
+def test_run_emulate_composes_the_captured_stdout_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_emulate
+
+    monkeypatch.setattr(
+        strat_emulate,
+        "emulate_for_flag",
+        lambda *a, **k: strat_emulate.EmulateResult(
+            ok=False,
+            stdout=b"checking key...\nwrong key\n",
+            reason="no flag in output or memory after emulation",
+        ),
+    )
+    att = ap._run_strategy("emulate", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "stdout=" in att.detail and "checking key" in att.detail
+    assert "no flag in output or memory after emulation" in att.detail
+
+
+def test_run_emulate_falls_back_to_reason_when_no_stdout_was_captured(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_emulate
+
+    monkeypatch.setattr(
+        strat_emulate,
+        "emulate_for_flag",
+        lambda *a, **k: strat_emulate.EmulateResult(ok=False, reason="unicorn not installed"),
+    )
+    att = ap._run_strategy("emulate", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert att.detail == "unicorn not installed"
+    assert "stdout=" not in att.detail  # nothing fabricated
+
+
+def test_run_format_string_composes_the_recovered_leak_with_the_no_flag_reason(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_fmt
+
+    monkeypatch.setattr(
+        strat_fmt,
+        "solve_format_string",
+        lambda *a, **k: strat_fmt.FmtResult(
+            ok=False,
+            leak="7ffee1 400123 7f8a9c",
+            reason="started the service and probed %p offsets but saw no flag in the stack leak",
+        ),
+    )
+    att = ap._run_strategy("format_string", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert "leak=" in att.detail and "7ffee1" in att.detail
+    assert "probed %p offsets" in att.detail
+
+
+def test_run_format_string_falls_back_to_reason_when_nothing_was_leaked(monkeypatch, autopwn_samples):
+    import triage_web.autopwn as ap
+    from triage_web.autopwn import strat_fmt
+
+    monkeypatch.setattr(
+        strat_fmt,
+        "solve_format_string",
+        lambda *a, **k: strat_fmt.FmtResult(ok=False, reason="no printf-family call site found"),
+    )
+    att = ap._run_strategy("format_string", str(autopwn_samples["memflag"]), None, 30)
+    assert not att.ok
+    assert att.detail == "no printf-family call site found"
+    assert "leak=" not in att.detail  # nothing fabricated
+
+
 def test_solveresult_summary_both_ways():
     from triage_web.autopwn import SolveResult
 
