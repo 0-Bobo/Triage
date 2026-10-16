@@ -52,6 +52,10 @@ regressed under the page's CSP); see "Change the UI" below.
    `autopwn` strategies.
 5. `SECURITY.md`: the threat model. Read this before ever running the
    server anywhere but your own machine.
+6. `ENGINEERING.md`: decision-level walkthroughs of specific subsystems
+   (the two decompilers, anti-disassembly handling, autopwn's strategy
+   registry, the sandbox, WSL routing, a real bug and how it surfaced).
+   Narrative, not a reference map; read it for *why*, not *where*.
 
 ## Where to make a change
 
