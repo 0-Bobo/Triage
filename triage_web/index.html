@@ -1826,6 +1826,9 @@
               <div class="term-bar">
                 <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
                 <span class="term-title">writeup.md</span>
+                <span style="flex:1"></span>
+                <button class="btn" id="auto-writeup-copy-btn" onclick="copyWriteup()"
+                  style="font-size:10px;padding:2px 8px">Copy</button>
               </div>
               <pre id="auto-writeup-preview"
                 style="margin:0;padding:12px;font-size:10.5px;line-height:1.6;white-space:pre-wrap;overflow:auto;flex:1;min-height:0"></pre>
@@ -2368,6 +2371,18 @@
       } catch (e) { toast('Writeup failed: ' + e.message, 'error'); }
     }
 
+    async function copyWriteup() {
+      if (!_lastAutoResult) { toast('No solved run to write up yet', 'error'); return; }
+      try {
+        const markdown = _lastWriteupMarkdown || await fetchWriteup(_lastAutoResult);
+        await navigator.clipboard.writeText(markdown);
+        const btn = document.getElementById('auto-writeup-copy-btn');
+        const prev = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => btn.textContent = prev, 1200);
+      } catch (e) { toast('Copy failed: ' + e.message, 'error'); }
+    }
+
     // ── File / Load ────────────────────────────────────────────────────────
     function showLoadDialog() { const p = prompt('Absolute path to binary:'); if (p) loadBinary(p); }
 
@@ -2434,6 +2449,10 @@
       const anfl = document.getElementById('auto-noflag-list'); if (anfl) anfl.innerHTML = '';
       const ap = document.getElementById('auto-proof'); if (ap) ap.textContent = '';
       const apt = document.getElementById('auto-proof-term'); if (apt) apt.style.display = 'none';
+      const awb = document.getElementById('auto-writeup-btn'); if (awb) awb.style.display = 'none';
+      const awt = document.getElementById('auto-writeup-term'); if (awt) awt.style.display = 'none';
+      const awp = document.getElementById('auto-writeup-preview'); if (awp) awp.textContent = '';
+      _lastAutoResult = null; _lastWriteupMarkdown = null;
 
       // Exploit (vulns / paths / rop / solvers)
       const vl = document.getElementById('vulns-list'); if (vl) { vl.style.display = 'none'; vl.innerHTML = ''; }
