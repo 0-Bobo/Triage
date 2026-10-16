@@ -18,6 +18,6 @@ labels: enhancement
 - [ ] This fits the existing "recon + first-move accelerator" scope (see
       `ARCHITECTURE.md` §5): `autopwn` surfaces/ranks/recovers parameters,
       it doesn't claim to "solve end to end."
-- [ ] This doesn't require a build step or bundler for `index.html`/`style.css`.
+- [ ] This doesn't require a build step or bundler for `index.html`.
 - [ ] (If it's a new `autopwn` strategy) it can ship with a golden-output
       test, per `CONTRIBUTING.md`.

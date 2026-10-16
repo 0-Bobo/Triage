@@ -35,9 +35,11 @@ Two halves, one process:
 
 `server.py` is the seam between both and the browser: ~40 routes, no
 analysis logic of its own, one global `Session` holding "the currently
-loaded binary." `index.html` + `style.css` are the frontend: no build
-step, no bundler, no framework; every panel is a `fetch()` to one of those
-routes rendered into a DOM string.
+loaded binary." `index.html` is the entire frontend (markup, inline
+styles, inline JS, embedded fonts): no build step, no bundler, no
+framework; every panel is a `fetch()` to one of those routes rendered
+into a DOM string. A CSS/font split was tried once and reverted (it
+regressed under the page's CSP); see "Change the UI" below.
 
 ## Reading order for a newcomer
 
@@ -60,8 +62,8 @@ routes rendered into a DOM string.
 | Add a new `autopwn` strategy | `triage_web/autopwn/strat_*.py` for the pattern, `registry.py` for the scoring hook, `CONTRIBUTING.md` for the golden-test requirement |
 | Add/fix an exploit-script generator | `triage_web/solvers.py`: one `_foo(path, bits, arch, ...)` function per generator, registered in `SOLVER_GENERATORS` |
 | Add an HTTP route | `triage_web/server.py`: keep it a thin seam; put logic in `analysis.py`/`loader.py`/`engine.py` and call it from the route |
-| Change the UI | `triage_web/index.html` (markup/JS) + `triage_web/style.css` (styles, design tokens in `:root`), no build step, so edits are live on refresh |
-| Change fonts/assets | `triage_web/static/` (served via a `StaticFiles` mount) |
+| Change the UI | `triage_web/index.html`: markup, inline `<style>` (design tokens in `:root`), and inline `<script>`, no build step, so edits are live on refresh |
+| Change fonts | the base64 `@font-face` data URIs at the top of `index.html`'s `<style>` block |
 
 ## What's safe to touch vs. load-bearing
 
@@ -89,5 +91,5 @@ surface (everything except the experimental decompiler and the `strat_*`
 strategy files, which have their own opt-in `make coverage-strat` report)
 stays at `fail_under = 100`. A new `autopwn` strategy or solver generator
 ships with a test in the same commit, see `CONTRIBUTING.md`. The frontend
-stays two static files with no build step; if a change needs a bundler,
-it's the wrong change for this repo.
+stays a single static file with no build step; if a change needs a
+bundler, it's the wrong change for this repo.
