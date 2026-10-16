@@ -1405,6 +1405,16 @@ def api_autopwn_stream(
     )
 
 
+@app.post("/api/autopwn/writeup")
+def api_autopwn_writeup(result: dict):
+    """Render a completed solve (the same dict shape the SSE ``done`` event
+    and ``POST /api/autopwn`` already return) as a standalone Markdown
+    writeup. Pure formatting - no file, no session, no re-run."""
+    from triage_web.autopwn.writeup import generate_writeup
+
+    return {"markdown": generate_writeup(result)}
+
+
 # ── Frontend ──────────────────────────────────────────────────────────
 
 

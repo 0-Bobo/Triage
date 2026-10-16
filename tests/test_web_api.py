@@ -165,11 +165,11 @@ def test_index_jump_links_use_a_quote_safe_dataset_pattern() -> None:
 def test_index_response_ok_guard_covers_every_load_fetcher() -> None:
     resp = TestClient(server.app).get("/")
     guard = "if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }"
-    # 4 pre-existing sites (capa, solver generate, solver execute, one more
-    # sharing the same guard) + the 10 fetchers this test locks: imports,
-    # strings, sections/memory-map, vulns, code-functions, vuln-hints, ROP
-    # scan, ROP gadget search, xrefs lookup, xrefs build.
-    assert resp.text.count(guard) == 14
+    # 5 pre-existing sites (capa, solver generate, solver execute, one more
+    # sharing the same guard, saveWriteup) + the 10 fetchers this test locks:
+    # imports, strings, sections/memory-map, vulns, code-functions, vuln-hints,
+    # ROP scan, ROP gadget search, xrefs lookup, xrefs build.
+    assert resp.text.count(guard) == 15
 
 
 def test_index_search_inputs_filter_client_side_without_a_fetch() -> None:

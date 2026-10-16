@@ -14,6 +14,7 @@ import json
 import sys
 
 from triage_web.autopwn import recon, solve
+from triage_web.autopwn.writeup import default_writeup_path, generate_writeup
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,7 +38,8 @@ def main(argv: list[str] | None = None) -> int:
                 _print_recon(data)
             continue
         res = solve(target, only=only, budget_s=args.budget, flag_pattern=args.pattern)
-        out.append(_result_dict(res))
+        result_dict = _result_dict(res)
+        out.append(result_dict)
         if not args.json:
             print(res.summary())
             if not res.success:
@@ -49,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"      {att['strategy']:<14} {conf}{att['detail'][:160]}")
         if res.success:
             rc = 0
+            writeup_path = default_writeup_path(result_dict)
+            writeup_path.write_text(generate_writeup(result_dict), encoding="utf-8")
+            if not args.json:
+                print(f"  writeup: {writeup_path}")
 
     if args.json:
         json.dump(out if len(out) > 1 else out[0], sys.stdout, indent=2, default=str)
