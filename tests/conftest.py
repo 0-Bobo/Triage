@@ -71,8 +71,12 @@ def autopwn_samples() -> dict[str, Path]:
                callback fn ptr) is freed on disconnect but left in a global table, then
                reused and overwritten by a later connection's CREATE, planting an
                attacker-chosen callback+arg that leaks $FLAG to it on the next BID
+    arith_check x86-64 ELF, `scanf("%x")` into x, then x^=0x1337; x+=42; x*=3;
+               compared against 0x7e before win() - an arithmetic chain, not a
+               single constant compare, so it needs z3's dataflow replay
     """
-    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate", "brute_pin", "smc", "uaf_service")}
+    names = ("memflag", "ret2win", "keycheck", "keygate", "brute_pin", "smc", "uaf_service", "arith_check")
+    return {n: SAMPLES / n for n in names}
 
 
 @pytest.fixture

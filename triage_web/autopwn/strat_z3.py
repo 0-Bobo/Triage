@@ -10,27 +10,24 @@ those ops on a symbolic input, and ask z3 for a satisfying value.
 It reuses ``strat_keygen``'s disassembly + guard-finding helpers so the two
 stay in step; only the modelling is new.
 
-Known bugs, found by a reliability audit while building a real end-to-end
-fixture (samples/src/arith_check.c, not yet wired into the sample set because
-of the second bug below) — not fixed yet:
+A reliability audit (building a real end-to-end fixture,
+samples/src/arith_check.c) found and fixed two bugs here:
 
-1. ``_score_z3`` (registry.py) only ranks this strategy when ``not v.has_win``,
-   but ``solve_z3`` itself hard-requires ``_win_addrs()`` to find a win-style
-   function (line ~86 below). Every name ``_win_addrs`` matches is also a
-   name ``has_win`` matches, so the two conditions are mutually exclusive:
-   z3 can never appear in a *natural* ranked plan under the current code,
-   confirmed empirically. The real fix is teaching the solver a winless path
-   (the guard's own taken branch, printing the flag directly, as its own
-   implicit target) rather than requiring a separate named win function.
-2. The arithmetic replay can disagree with the real compiled behaviour: on
-   ``x ^= 0x1337; x += 42; x *= 3; cmp x, 0x7e``, z3 reported a "satisfying"
-   key (``0x1363``) that does not actually satisfy the real binary (verified
-   key is ``0x1337``) - likely a basic-block/op-sequence capture bug in
-   ``_model_guard_block``. ``_run_z3`` (registry.py) already treats a
-   recovered key as unconfirmed until the live replay actually produces a
-   flag, so this doesn't currently surface as a false "solved", but the
-   underlying model is wrong and should not be trusted for its recovered-key
-   value even when z3 itself reports ``sat``.
+1. ``_score_z3`` (registry.py) used to exclude ``v.has_win``, but ``solve_z3``
+   itself hard-requires ``_win_addrs()`` to find a win-style function - every
+   name ``_win_addrs`` matches is also a name ``has_win`` matches, so the two
+   conditions were mutually exclusive and z3 could never appear in a natural
+   ranked plan. Fixed by scoring it lower instead of excluding it.
+2. ``_model_guard_block`` used to replay the guard as a single accumulator,
+   extracting only an *immediate* operand per arithmetic instruction - so any
+   op against another register (not a constant) was silently dropped instead
+   of modelled. On ``x ^= 0x1337; x += 42; x *= 3; cmp x, 0x7e``, gcc even at
+   -O0 lowers ``x *= 3`` as ``edx = x; eax = x; eax += eax; eax += edx`` (a
+   double-and-add-the-saved-copy strength reduction, not an ``imul``) - two
+   register-register adds with no immediate, so the old code dropped the
+   multiply entirely and z3 "solved" for the two-op chain instead, landing on
+   ``0x1363`` instead of the real ``0x1337``. Fixed by replaying the block as
+   a real register/stack-slot dataflow simulation instead of one accumulator.
 """
 
 from __future__ import annotations
@@ -156,10 +153,61 @@ def solve_z3(path: str, *, run: bool = True, timeout: float = 20.0) -> Z3Result:
         ldr.close()
 
 
+# x86 sub-register spellings that name the same architectural register, so
+# `mov edx, eax` / `add eax, eax` / `add eax, edx` thread one value through a
+# register rather than each spelling getting its own untracked slot.
+_X86_REG_FAMILY = {
+    "al": "a",
+    "ah": "a",
+    "ax": "a",
+    "eax": "a",
+    "rax": "a",
+    "bl": "b",
+    "bh": "b",
+    "bx": "b",
+    "ebx": "b",
+    "rbx": "b",
+    "cl": "c",
+    "ch": "c",
+    "cx": "c",
+    "ecx": "c",
+    "rcx": "c",
+    "dl": "d",
+    "dh": "d",
+    "dx": "d",
+    "edx": "d",
+    "rdx": "d",
+    "sil": "si",
+    "si": "si",
+    "esi": "si",
+    "rsi": "si",
+    "dil": "di",
+    "di": "di",
+    "edi": "di",
+    "rdi": "di",
+    "bpl": "bp",
+    "bp": "bp",
+    "ebp": "bp",
+    "rbp": "bp",
+    "spl": "sp",
+    "sp": "sp",
+    "esp": "sp",
+    "rsp": "sp",
+}
+for _n in range(8, 16):
+    for _suf in ("", "d", "w", "b"):
+        _X86_REG_FAMILY[f"r{_n}{_suf}"] = f"r{_n}"
+del _n, _suf
+
+
 def _model_guard_block(z3, insns, guard_addr, bits):
-    """Return ``f(inp_bitvec) -> bitvec`` replaying the arithmetic in the basic
-    block that ends at ``guard_addr``. Unmodelled ops are skipped, so the
-    solver reports unsat rather than yielding a wrong key."""
+    """Return ``f(inp_bitvec) -> bitvec`` replaying the basic block that ends
+    at ``guard_addr`` as a real register/stack-slot dataflow simulation (not
+    a single accumulator - see the module docstring's bug #2 for why that
+    silently dropped operations like the `eax += edx` half of a compiler's
+    `x*3 = x+x+x` strength reduction). The *first* register or memory slot
+    read before ever being written becomes the symbolic input; anything else
+    read-before-written is assumed unrelated setup state and starts at 0."""
     log: list[str] = []
     idx = next((i for i, ins in enumerate(insns) if ins.address == guard_addr), None)
     if idx is None:  # pragma: no cover - guard addr always came from this list
@@ -167,51 +215,82 @@ def _model_guard_block(z3, insns, guard_addr, bits):
     start = idx
     while start > 0 and insns[start - 1].mnemonic.lower() not in ("call", "ret", "jmp", "retq", "callq"):
         start -= 1
-    ops: list[tuple[str, int]] = []
-    for ins in insns[start:idx]:
-        m = ins.mnemonic.lower()
-        if m not in _ARITH:
-            continue
-        parts = [p.strip() for p in ins.op_str.split(",")]
-        imm = _imm_from_op(parts[-1]) if parts else None
-        if m in ("neg", "not"):
-            ops.append((m, 0))
-        elif m in ("inc", "dec"):
-            ops.append(("add" if m == "inc" else "sub", 1))
-        elif imm is not None:
-            ops.append((m, imm & ((1 << bits) - 1)))
-    if ops:
-        log.append("z3 model: " + " → ".join(m if m in ("neg", "not") else f"{m} {v:#x}" for m, v in ops))
+    block = insns[start:idx]
+    cmp_parts = [p.strip() for p in insns[idx].op_str.split(",")] if insns[idx].op_str else []
+    cmp_dst = cmp_parts[0] if cmp_parts else None
+
+    trace = [f"{i.mnemonic} {i.op_str}" for i in block if i.mnemonic.lower() in (*_ARITH, "mov")]
+    if trace:
+        log.append("z3 model trace: " + " ; ".join(trace))
 
     def f(x):
         mask = z3.BitVecVal((1 << bits) - 1, bits)
-        for m, v in ops:
-            c = z3.BitVecVal(v, bits)
-            if m == "add":
-                x = x + c
-            elif m == "sub":
-                x = x - c
-            elif m == "xor":
-                x = x ^ c
-            elif m == "and":
-                x = x & c
-            elif m == "or":
-                x = x | c
-            elif m in ("imul", "mul"):
-                x = x * c
-            elif m in ("shl", "sal"):
-                x = x << c
-            elif m in ("shr", "sar"):
-                x = z3.LShR(x, c)
-            elif m == "rol":
-                x = z3.RotateLeft(x, c)
-            elif m == "ror":
-                x = z3.RotateRight(x, c)
-            elif m == "neg":
-                x = -x
-            elif m == "not":
-                x = ~x
-            x = x & mask
+        regs: dict[str, object] = {}
+        mem: dict[str, object] = {}
+        seeded = False
+
+        def read(tok: str):
+            nonlocal seeded
+            tok = tok.strip()
+            imm = _imm_from_op(tok)
+            if imm is not None:
+                return z3.BitVecVal(imm & ((1 << bits) - 1), bits)
+            key = _X86_REG_FAMILY.get(tok, tok)
+            table = regs if tok in _X86_REG_FAMILY else mem
+            if key not in table:
+                table[key] = x if not seeded else z3.BitVecVal(0, bits)
+                seeded = True
+            return table[key]
+
+        def write(tok: str, v):
+            tok = tok.strip()
+            key = _X86_REG_FAMILY.get(tok, tok)
+            (regs if tok in _X86_REG_FAMILY else mem)[key] = v & mask
+
+        for ins in block:
+            m = ins.mnemonic.lower()
+            if not ins.op_str:
+                continue
+            parts = [p.strip() for p in ins.op_str.split(",")]
+            dst = parts[0]
+            if m == "mov" and len(parts) == 2:
+                write(dst, read(parts[1]))
+            elif m in ("imul", "mul") and len(parts) == 3:
+                write(dst, read(parts[1]) * read(parts[2]))
+            elif m in ("neg", "not"):
+                cur = read(dst)
+                write(dst, -cur if m == "neg" else ~cur)
+            elif m in ("inc", "dec"):
+                write(dst, read(dst) + (1 if m == "inc" else -1))
+            elif m in _ARITH and len(parts) >= 2:
+                cur, rhs = read(dst), read(parts[-1])
+                if m == "add":
+                    res = cur + rhs
+                elif m == "sub":
+                    res = cur - rhs
+                elif m == "xor":
+                    res = cur ^ rhs
+                elif m == "and":
+                    res = cur & rhs
+                elif m == "or":
+                    res = cur | rhs
+                elif m in ("imul", "mul"):
+                    res = cur * rhs
+                elif m in ("shl", "sal"):
+                    res = cur << rhs
+                elif m in ("shr", "sar"):
+                    res = z3.LShR(cur, rhs)
+                elif m == "rol":
+                    res = z3.RotateLeft(cur, rhs)
+                else:  # ror
+                    res = z3.RotateRight(cur, rhs)
+                write(dst, res)
+
+        if cmp_dst is not None:
+            key = _X86_REG_FAMILY.get(cmp_dst, cmp_dst)
+            table = regs if cmp_dst in _X86_REG_FAMILY else mem
+            if key in table:
+                return table[key] & mask
         return x
 
     return f, log

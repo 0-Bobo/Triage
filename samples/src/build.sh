@@ -35,6 +35,7 @@ gcc -O0 -fno-stack-protector -no-pie -o "$out/brute_pin" brute_pin.c
 gcc -O0 -fno-stack-protector -no-pie -fcf-protection=none -pthread \
     -o "$out/uaf_service" uaf_service.c
 gcc -no-pie -nostdlib -O0 -Wl,-N -o "$out/smc" smc.S
+gcc -O0 -fno-stack-protector -no-pie -o "$out/arith_check" arith_check.c
 
 # Windows PE fixtures need a MinGW cross-compiler and are rebuilt manually:
 #   x86_64-w64-mingw32-gcc -o ../pe64_hello.exe pe_hello.c

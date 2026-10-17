@@ -137,6 +137,18 @@ def test_z3_solves_a_constant_compare_guard(autopwn_samples):
     assert r.win == "win" and "process(" in r.script
 
 
+def test_z3_solves_an_arithmetic_chain_guard(autopwn_samples):
+    # Closes a gap an earlier audit found: the guard replay used to track a
+    # single accumulator and only pick up an *immediate* operand per op, so
+    # `x *= 3` compiled as a register-to-register double-and-add-back (no
+    # immediate at all) silently vanished from the model, and z3 "solved"
+    # for the wrong, shorter chain (0x1363 instead of the real 0x1337).
+    from triage_web.autopwn.strat_z3 import solve_z3
+
+    r = solve_z3(str(autopwn_samples["arith_check"]), timeout=10)
+    assert r.ok and r.key_int == 0x1337 and r.flag == "flag{arith_z3_solved}"
+
+
 @pytest.mark.slow
 def test_brute_solves_a_short_digit_pin(autopwn_samples):
     # Closes a gap an earlier audit found: brute had solid unit-level
