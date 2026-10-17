@@ -316,7 +316,10 @@ def run_script(
             else "sleep 1; "
         )
         server_prefix = f"({server_cmd}) >/dev/null 2>&1 & SERVER_PID=$!; {wait}"
-        server_suffix = "; kill $SERVER_PID 2>/dev/null || true"
+        # Lands on its own line right after the heredoc terminator (see both
+        # call sites below), so no leading `;` - a bare `;` there is a bash
+        # syntax error ("unexpected token `;'"), not a harmless no-op.
+        server_suffix = "kill $SERVER_PID 2>/dev/null || true"
 
     if _on_linux():
         interp = python or shutil.which("python3") or "python3"

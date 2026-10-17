@@ -67,8 +67,12 @@ def autopwn_samples() -> dict[str, Path]:
     brute_pin  x86-64 ELF, `scanf("%d")` guarded by `pin == 42` → prints the flag
     smc        x86-64 ELF, raw asm; XOR-0x5a-decodes a payload in an RWE segment at _start
                and jumps into it, which prints the flag via a raw syscall
+    uaf_service x86-64 ELF, threaded TCP service; a watcher's malloc'd record (with a
+               callback fn ptr) is freed on disconnect but left in a global table, then
+               reused and overwritten by a later connection's CREATE, planting an
+               attacker-chosen callback+arg that leaks $FLAG to it on the next BID
     """
-    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate", "brute_pin", "smc")}
+    return {n: SAMPLES / n for n in ("memflag", "ret2win", "keycheck", "keygate", "brute_pin", "smc", "uaf_service")}
 
 
 @pytest.fixture

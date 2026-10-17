@@ -593,6 +593,18 @@ def test_uaf_emitted_exploit_is_parameterised():
 _UAF_HOSTILE_PATH = "evil'\"; rm -rf ~; $(touch pwned).bin"
 
 
+@pytest.mark.slow
+def test_uaf_solves_a_real_dangling_callback_service(autopwn_samples):
+    # Closes a gap an earlier audit found: uaf had solid unit-level
+    # routing/classification tests against synthetic disassembly, but no
+    # real compiled service proving the full recon -> UAF-plant -> BID ->
+    # flag pipeline against an actual threaded TCP server.
+    from triage_web.autopwn.strat_uaf import solve_uaf
+
+    r = solve_uaf(str(autopwn_samples["uaf_service"]), timeout=40)
+    assert r.ok and r.flag == "flag{triage_uaf_selftest}"
+
+
 def test_uaf_server_shell_cmd_quotes_a_hostile_path(monkeypatch):
     from triage_web.autopwn import strat_uaf as u
 

