@@ -534,7 +534,15 @@ class BinaryLoader:
             base = self._pe.OPTIONAL_HEADER.ImageBase
             for sec in self._pe.sections:
                 sv = sec.VirtualAddress + base
-                if sv <= vaddr < sv + sec.SizeOfRawData:
+                # Bound by the smaller of VirtualSize and SizeOfRawData, not
+                # SizeOfRawData alone: FileAlignment padding routinely makes
+                # SizeOfRawData larger than the section's actual VirtualSize
+                # (get_sections() reports VirtualSize as `size`), so using it
+                # alone resolves virtual addresses past the section's real
+                # end into the next section's raw bytes / alignment padding
+                # instead of correctly reporting them as unmapped.
+                span = min(sec.Misc_VirtualSize, sec.SizeOfRawData)
+                if sv <= vaddr < sv + span:
                     return sec.PointerToRawData + (vaddr - sv)
         return -1
 

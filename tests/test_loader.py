@@ -165,6 +165,26 @@ def test_pe_is_identified_and_parsed(pe_path) -> None:
         pe.close()
 
 
+def test_pe_vaddr_offset_stops_at_virtual_size(pe_path) -> None:
+    """FileAlignment padding routinely makes a PE section's raw-on-disk size
+    bigger than its VirtualSize (e.g. ``.data`` here: VirtualSize 0xc0 padded
+    out to a SizeOfRawData of 0x200). A vaddr past VirtualSize but still
+    inside SizeOfRawData must resolve as unmapped, not into that padding /
+    the next section's raw bytes — matching what get_sections() reports as
+    the section's actual size."""
+    pe = BinaryLoader(str(pe_path))
+    try:
+        padded = next(s for s in pe._pe.sections if s.SizeOfRawData > s.Misc_VirtualSize > 0)
+        base = pe._pe.OPTIONAL_HEADER.ImageBase
+        sv = padded.VirtualAddress + base
+        in_padding = sv + padded.Misc_VirtualSize + 1  # past VirtualSize, still < SizeOfRawData
+        assert in_padding < sv + padded.SizeOfRawData
+        assert pe.vaddr_to_offset(in_padding) == -1
+        assert pe.read_vaddr(in_padding, 16) == b""
+    finally:
+        pe.close()
+
+
 def test_pe_import_export_fallback_without_lief(pe_path) -> None:
     """With lief unavailable the pefile DIRECTORY_ENTRY_* paths take over."""
     pe = BinaryLoader(str(pe_path))
