@@ -86,6 +86,15 @@ def test_status_install_rejects_an_unknown_engine_id() -> None:
     assert resp.status_code == 400
 
 
+def test_status_install_reports_a_timed_out_pip_run(monkeypatch) -> None:
+    def fake_run(cmd, **kwargs):
+        raise server.subprocess.TimeoutExpired(cmd, kwargs.get("timeout"), output="Collecting angr\n")
+
+    monkeypatch.setattr(server.subprocess, "run", fake_run)
+    body = TestClient(server.app).post("/api/status/install", json={"id": "angr"}).json()
+    assert body == {"ok": False, "returncode": None, "timed_out": True, "output": "Collecting angr\n"}
+
+
 def test_index_status_panel_renders_three_way_availability() -> None:
     resp = TestClient(server.app).get("/")
     assert '<span class="badge badge-low">Installed</span>' in resp.text
