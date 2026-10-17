@@ -4,5 +4,5 @@
     "NX (No-Execute)": "Enabled", "PIE (ASLR)": "Disabled", "RELRO": "Partial",
     "Stack Canary": "Disabled", "Fortify Source": "Disabled", "RWX Segments": "No"
   },
-  "plan": ["keygen", "emulate", "angr", "format_string", "ret2win"]
+  "plan": ["keygen", "emulate", "angr", "format_string", "z3", "ret2win"]
 }

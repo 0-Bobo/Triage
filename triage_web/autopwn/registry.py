@@ -219,8 +219,12 @@ def _score_z3(v: StaticView) -> tuple[int, str] | None:
     """Arithmetic / checksum 'enter the key' checkers: a chain of
     add/sub/xor/mul/rol on the input compared to a constant. Needs real
     input to solve for, so keygen (constant-compare) is preferred when a
-    win-style function is present."""
-    if not v.reads_input or v.has_win:
+    win-style function is present - via a lower score here, not exclusion:
+    solve_z3 itself requires a win-style target to constrain toward (see
+    strat_z3.py's module docstring), so excluding v.has_win made the score
+    gate and the solver's own requirement mutually exclusive - z3 could
+    never fire in a real ranked plan, only when forced with --only z3."""
+    if not v.reads_input:
         return None
     if v.capa_hit("checksum", "crc", "hash", "arithmetic", "encode data using xor"):
         return 68, "capa: arithmetic / checksum over input — solve the constraint with z3"
