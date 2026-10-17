@@ -325,13 +325,20 @@ class BinaryLoader:
             return self._import_cache
         imps = []
         if self._lief_bin:
-            # Build PLT address map: LIEF pltgot_relocations are in PLT order
+            # Build PLT address map: LIEF pltgot_relocations are in PLT order.
+            # A CET/IBT binary (the toolchain default on modern distros) routes
+            # every call through .plt.sec - one 16-byte endbr64+jmp stub per
+            # relocation, 0-indexed, no resolver entry - instead of .plt (whose
+            # entry 0 is the lazy-binding resolver, imports start at index 1).
+            # .plt still exists but .text never calls it directly once
+            # .plt.sec is present, so prefer it when both are there.
             plt_relocs = list(getattr(self._lief_bin, "pltgot_relocations", []))
-            plt_base = None
+            plt_base = plt_sec_base = None
             for sec in getattr(self._lief_bin, "sections", []):
-                if sec.name == ".plt":
+                if sec.name == ".plt.sec":
+                    plt_sec_base = sec.virtual_address
+                elif sec.name == ".plt":
                     plt_base = sec.virtual_address
-                    break
             for func in self._lief_bin.imported_functions:
                 lib = ""
                 try:
@@ -342,12 +349,13 @@ class BinaryLoader:
                 name = func.name
                 # Strip versioned suffix (e.g. malloc@@GLIBC_2.0 → malloc)
                 base_name = name.split("@@")[0] if "@@" in name else name
-                if plt_base:
-                    # First PLT entry (index 0) is the resolver; imports start at index 1
+                if plt_sec_base is not None or plt_base:
                     for ri, r in enumerate(plt_relocs):
                         rs = r.symbol.name if r.symbol else ""
                         if rs and (rs == name or rs == base_name or rs.split("@@")[0] == base_name):
-                            address = plt_base + 0x10 + ri * 0x10
+                            address = (
+                                plt_sec_base + ri * 0x10 if plt_sec_base is not None else plt_base + 0x10 + ri * 0x10
+                            )
                             break
                 imps.append({"name": name, "library": lib, "address": address})
         elif self.fmt == self.FMT_ELF and self._elf:

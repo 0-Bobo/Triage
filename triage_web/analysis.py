@@ -59,27 +59,6 @@ def build_known_calls(loader) -> dict:
         addr = imp.get("address", 0)
         if addr:
             known[addr] = imp["name"]
-
-    # The code calls the .plt.sec stub, not the .plt entry — map stub → name.
-    secs = loader.get_sections()
-    plt_sec = None
-    for s in secs:
-        if s["name"].strip(".") in ("plt.sec", "plt"):
-            plt_sec = s
-            if s["name"].strip(".") == "plt.sec":
-                break
-    if plt_sec and plt_sec["name"].strip(".") == "plt.sec":
-        plt = next((s for s in secs if s["name"].strip(".") == "plt"), None)
-        if plt:
-            ps_base, p_base = plt_sec["vaddr"], plt["vaddr"]
-            entry_size = 0x10  # typical x86-64 PLT
-            for plt_addr, name in list(known.items()):
-                off = plt_addr - p_base
-                if 0 < off < plt["size"] and off % entry_size == 0:
-                    idx = off // entry_size - 1  # entry 0 is the resolver
-                    stub_addr = ps_base + idx * entry_size
-                    known.setdefault(stub_addr, name)
-
     for name, addr in loader.get_functions():
         known[addr] = name
     return known

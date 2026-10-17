@@ -263,6 +263,35 @@ def test_protections_reads_the_legacy_bind_now_tag(crackme_path, monkeypatch) ->
         ldr.close()
 
 
+def test_get_imports_address_matches_the_stub_text_actually_calls(crackme_path) -> None:
+    """On a CET/IBT binary (the toolchain default here), .text calls the
+    .plt.sec stub, never the .plt entry - get_imports()'s address must be
+    the one real call sites target, or every address-keyed PLT map built
+    on top of it (autopwn's route/emulate strategies) silently never matches."""
+    from triage_web.engine import Disassembler
+
+    ldr = BinaryLoader(str(crackme_path))
+    try:
+        sections = {s["name"]: s for s in ldr.get_sections()}
+        plt_sec = sections.get(".plt.sec")
+        if plt_sec is None:
+            pytest.skip("fixture has no .plt.sec on this toolchain")
+        code, base = ldr._get_text_section()
+        call_targets = set()
+        for insn in Disassembler().disassemble(bytes(code), base):
+            if insn["mnemonic"] == "call":
+                try:
+                    call_targets.add(int(insn["op_str"], 16))
+                except ValueError:
+                    pass
+        imports = [i for i in ldr.get_imports() if i["address"]]
+        assert imports
+        assert any(i["address"] in call_targets for i in imports)
+        assert all(plt_sec["vaddr"] <= i["address"] < plt_sec["vaddr"] + plt_sec["size"] for i in imports)
+    finally:
+        ldr.close()
+
+
 def test_lief_import_library_attribute_error_is_swallowed(crackme_path, monkeypatch) -> None:
     ldr = BinaryLoader(str(crackme_path))
     try:
