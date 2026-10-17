@@ -42,8 +42,11 @@ format:
 
 check: lint test
 
-coverage:
-	uv run pytest --cov=triage_web --cov-report=term-missing --cov-report=html --cov-report=xml
+coverage:        ## skips slow tests too - the two that matter (uaf/brute e2e) spawn a
+                 ## sandboxed server via bwrap, which GitHub-hosted runners' restricted
+                 ## user namespaces don't allow; both live in strat_uaf.py/strat_brute.py,
+                 ## already coverage-omit-ed below, so this doesn't touch the 100% gate.
+	uv run pytest -m "not slow" --cov=triage_web --cov-report=term-missing --cov-report=html --cov-report=xml
 
 coverage-strat:  ## report-only: how much of the omit-ed strategy layer the e2e tests actually reach (no gate)
 	uv run coverage run --rcfile=/dev/null --source=triage_web/autopwn -m pytest tests/test_autopwn.py -q
