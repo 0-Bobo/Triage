@@ -212,7 +212,7 @@ make check      # ruff check + ruff format --check + pytest
 make coverage   # + term-missing / html / xml
 ```
 
-- 555 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
+- 583 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
   layer drives angr/unicorn/pwntools, so it is exercised end to end but left out
   of the line-coverage gate; `make coverage-strat` reports its real number, and a
   module only joins that opt-out list together with a golden-output test.
