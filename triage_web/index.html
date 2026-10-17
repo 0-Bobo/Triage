@@ -3366,6 +3366,7 @@
       wsl: '<span class="badge badge-low">Installed via WSL</span>',
       missing: '<span class="badge badge-crit">Missing</span>',
     };
+    const INSTALLABLE_ENGINES = new Set(['capstone', 'pyelftools', 'pefile', 'lief', 'capa', 'angr', 'z3', 'unicorn', 'pwntools']);
     async function loadStatus(refresh) {
       const container = document.getElementById('status-container');
       const rt = document.getElementById('status-runtime');
@@ -3376,8 +3377,11 @@
         container.innerHTML = (data.engines || []).map(e => {
           const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;
           const detail = e.detail ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + esc(e.detail) + '</div>' : '';
+          const install = (!e.installed && INSTALLABLE_ENGINES.has(e.id))
+            ? '<button class="btn" style="margin-left:8px" id="install-' + esc(e.id) + '" onclick="installEngine(\'' + esc(e.id) + '\')">Install</button>'
+            : '';
           return '<div class="vuln-item"><span class="vuln-name" style="min-width:90px">' + esc(e.name) + '</span>' +
-            '<span class="vuln-desc" style="flex:1">' + esc(e.role) + detail + '</span>' + badge + '</div>';
+            '<span class="vuln-desc" style="flex:1">' + esc(e.role) + detail + '</span>' + badge + install + '</div>';
         }).join('');
         const info = data.runtime || {};
         let text = info.platform || '';
@@ -3388,6 +3392,29 @@
       }
     }
     function onShowStatus() { loadStatus(); }
+
+    async function installEngine(id) {
+      const btn = document.getElementById('install-' + id);
+      if (btn) { btn.disabled = true; btn.textContent = 'Installing…'; }
+      setStatus('Installing ' + id + '…', true);
+      try {
+        const r = await fetch('/api/status/install', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          toast(id + ' installed', 'success');
+        } else {
+          const why = data.timed_out ? 'timed out' : 'pip install failed — see server log';
+          toast(id + ': ' + why, 'error');
+        }
+      } catch (e) {
+        toast('Install failed: ' + e.message, 'error');
+      } finally {
+        setStatus('Ready');
+        loadStatus(true);
+      }
+    }
 
     // ── Util ───────────────────────────────────────────────────────────────
     function esc(s) {

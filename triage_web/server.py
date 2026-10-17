@@ -5,6 +5,7 @@ import logging
 import os
 import platform
 import re
+import subprocess
 import sys
 import tempfile
 import threading
@@ -377,6 +378,44 @@ def api_status(refresh: bool = False):
         "engines": engines,
         "runtime": {"platform": platform.system(), "wsl": have_wsl() if platform.system() == "Windows" else None},
     }
+
+
+# pip specs for the "Install" button on a missing engine, mirroring
+# requirements-web.txt / pyproject.toml's [analysis]/[exploit] extras. A
+# fixed whitelist, not a client-supplied string — api_status_install() only
+# ever shells out to one of these, never to caller input.
+_INSTALLABLE_PACKAGES: dict[str, list[str]] = {
+    "capstone": ["capstone>=5.0"],
+    "pyelftools": ["pyelftools>=0.29"],
+    "pefile": ["pefile>=2023.2.7"],
+    "lief": ["lief>=0.14"],
+    "capa": ["flare-capa>=7.0"],
+    "angr": ["angr>=9.2", "bitstring<5"],
+    "z3": ["z3-solver>=4.12"],
+    "unicorn": ["unicorn>=2.0"],
+    "pwntools": ["pwntools>=4.15"],
+}
+
+
+@app.post("/api/status/install")
+def api_status_install(body: dict):
+    """Install one missing optional engine with ``{python} -m pip install``,
+    into this same interpreter (the one Solvers/autopwn import from)."""
+    engine_id = body.get("id", "")
+    specs = _INSTALLABLE_PACKAGES.get(engine_id)
+    if specs is None:
+        raise HTTPException(400, f"no installable package for {engine_id!r}")
+    cmd = [sys.executable, "-m", "pip", "install", *specs]
+    try:
+        # cmd is built only from sys.executable and _INSTALLABLE_PACKAGES's
+        # fixed specs, never from caller input (engine_id is a dict lookup,
+        # not interpolated) - no shell, no untrusted argument.
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)  # noqa: S603
+    except subprocess.TimeoutExpired as exc:
+        return {"ok": False, "returncode": None, "timed_out": True, "output": (exc.output or "")[-4000:]}
+    _wsl_env_status.cache_clear()
+    output = (proc.stdout or "") + (proc.stderr or "")
+    return {"ok": proc.returncode == 0, "returncode": proc.returncode, "timed_out": False, "output": output[-4000:]}
 
 
 @app.post("/api/shutdown")

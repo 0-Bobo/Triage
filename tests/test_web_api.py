@@ -47,14 +47,55 @@ def test_status_reports_every_engine_with_a_three_way_availability() -> None:
     assert body["runtime"]["platform"]
 
 
+def test_status_install_runs_pip_for_a_known_engine(monkeypatch) -> None:
+    calls = {}
+
+    class _FakeProc:
+        returncode = 0
+        stdout = "Successfully installed z3-solver-4.12\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls["cmd"] = cmd
+        return _FakeProc()
+
+    monkeypatch.setattr(server.subprocess, "run", fake_run)
+    resp = TestClient(server.app).post("/api/status/install", json={"id": "z3"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"ok": True, "returncode": 0, "timed_out": False, "output": _FakeProc.stdout}
+    assert calls["cmd"][:3] == [server.sys.executable, "-m", "pip"]
+    assert "z3-solver>=4.12" in calls["cmd"]
+
+
+def test_status_install_reports_a_failed_pip_run(monkeypatch) -> None:
+    class _FakeProc:
+        returncode = 1
+        stdout = ""
+        stderr = "ERROR: no matching distribution\n"
+
+    monkeypatch.setattr(server.subprocess, "run", lambda cmd, **kw: _FakeProc())
+    body = TestClient(server.app).post("/api/status/install", json={"id": "angr"}).json()
+    assert body["ok"] is False
+    assert body["returncode"] == 1
+    assert "no matching distribution" in body["output"]
+
+
+def test_status_install_rejects_an_unknown_engine_id() -> None:
+    resp = TestClient(server.app).post("/api/status/install", json={"id": "not-a-real-engine"})
+    assert resp.status_code == 400
+
+
 def test_index_status_panel_renders_three_way_availability() -> None:
     resp = TestClient(server.app).get("/")
     assert '<span class="badge badge-low">Installed</span>' in resp.text
     assert '<span class="badge badge-low">Installed via WSL</span>' in resp.text
     assert '<span class="badge badge-crit">Missing</span>' in resp.text
     assert "const badge = AVAILABILITY_BADGES[e.availability] || AVAILABILITY_BADGES.missing;" in resp.text
-    assert "e.installed" not in resp.text
+    assert "AVAILABILITY_BADGES[e.installed" not in resp.text  # badge keys off availability, not installed
     assert 'onclick="loadStatus(true)"' in resp.text
+    assert "async function installEngine(id)" in resp.text
+    assert "fetch('/api/status/install'" in resp.text
     assert "fetch('/api/status' + (refresh ? '?refresh=1' : ''))" in resp.text
     assert "function onShowStatus() { loadStatus(); }" in resp.text
     assert 'onclick="loadStatus()"' not in resp.text
