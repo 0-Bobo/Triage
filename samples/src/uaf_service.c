@@ -24,7 +24,6 @@ static long client_id[MAXC];
 static int client_used[MAXC];
 static long next_id = 1;
 
-__attribute__((optimize("O1")))
 void sender(int fd, const char *flag) {
     write(fd, flag, 64);
 }

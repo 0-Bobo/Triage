@@ -221,7 +221,11 @@ def _route_analysis(ldr, insns, flag_func: int, log) -> str:
 
 
 _REG64 = {  # 32-bit / lower forms -> the 64-bit name they belong to
-    **{r: r for r in ("rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11", "rbx", "r12", "r13", "r14", "r15", "rbp")},
+    **{
+        r: r
+        for r in ("rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11", "rbx", "r12", "r13", "r14", "r15", "rbp")
+    },
+    "eax": "rax",
     "edi": "rdi",
     "esi": "rsi",
     "edx": "rdx",
@@ -244,32 +248,61 @@ def _regs_in(ops: str) -> set[str]:
 
 
 def _classify_arg1_use(body, plt: dict[int, str]) -> str:
-    """Walk a callee's body tracking which 64-bit regs still alias arg1
-    (``rdi`` on entry). The first decisive use wins."""
-    alias = {"rdi"}
+    """Walk a callee's body tracking which 64-bit regs *and* stack slots
+    still alias arg1 (``rdi`` on entry). The first decisive use wins.
+
+    At -O0 a register is routinely spilled to the stack right after entry
+    and reloaded later (e.g. ``mov [rbp-8], rdi`` ... ``mov rdi, [rbp-8]``,
+    or via an unrelated-looking hop through eax/rax). Tracking registers
+    alone treated that reload as "overwritten by something unrelated" and
+    dropped the alias before the decisive use, so the memory slot is
+    tracked as an alias member too, symmetrically with registers."""
+    regs = {"rdi"}
+    slots: set[str] = set()
+
+    def key(tok: str) -> tuple[str, str] | None:
+        tok = tok.strip()
+        r64 = _REG64.get(tok)
+        if r64:
+            return ("reg", r64)
+        if "[" in tok:
+            return ("mem", tok[tok.index("[") :])
+        return None
+
+    def in_alias(k: tuple[str, str] | None) -> bool:
+        return k is not None and (k[1] in regs if k[0] == "reg" else k[1] in slots)
+
+    def add_alias(k: tuple[str, str] | None) -> None:
+        if k is not None:
+            (regs if k[0] == "reg" else slots).add(k[1])
+
+    def discard_alias(k: tuple[str, str] | None) -> None:
+        if k is not None:
+            (regs if k[0] == "reg" else slots).discard(k[1])
+
     for x in body:
         m, ops = x.mnemonic, x.op_str
         # dereference of an aliased reg -> pointer routing
-        if any(re.search(rf"\[{r}\b", ops) or re.search(rf"\b{r} \+", ops) for r in alias):
-            for r in alias:
+        if any(re.search(rf"\[{r}\b", ops) or re.search(rf"\b{r} \+", ops) for r in regs):
+            for r in regs:
                 if re.search(rf"\[\s*{r}\b", ops) or re.search(rf"\[{r} [+\-]", ops):
                     return "ptr"
         # arg1 still in rdi when a send-family libc call is made -> fd routing
-        if m in ("call", "callq") and "rdi" in alias:
+        if m in ("call", "callq") and "rdi" in regs:
             if plt.get(_imm(ops) or -1, "").split("@")[0] in _SEND_FNS:
                 return "fd"
-            alias.discard("rdi")  # a non-send call clobbers rdi (arg regs are caller-saved)
+            regs.discard("rdi")  # a non-send call clobbers rdi (arg regs are caller-saved)
             continue
         # aliased reg compared against a struct field with a large displacement
-        if m.startswith("cmp") and (_regs_in(ops) & alias) and re.search(r"\[\w+ [+\-] 0x[0-9a-fA-F]{3,}\]", ops):
+        if m.startswith("cmp") and (_regs_in(ops) & regs) and re.search(r"\[\w+ [+\-] 0x[0-9a-fA-F]{3,}\]", ops):
             return "id"
         if m == "mov" and "," in ops:
             dst, src = (p.strip() for p in ops.split(",", 1))
-            d64, s64 = _REG64.get(dst), _REG64.get(src)
-            if s64 in alias and d64:
-                alias.add(d64)
-            elif d64 in alias and s64 not in alias:
-                alias.discard(d64)  # overwritten by something unrelated
+            dk, sk = key(dst), key(src)
+            if in_alias(sk) and dk is not None:
+                add_alias(dk)
+            elif in_alias(dk) and not in_alias(sk):
+                discard_alias(dk)  # overwritten by something unrelated
     return "unknown"
 
 
