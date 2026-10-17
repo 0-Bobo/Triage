@@ -212,7 +212,7 @@ make check      # ruff check + ruff format --check + pytest
 make coverage   # + term-missing / html / xml
 ```
 
-- 583 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
+- 585 tests. `fail_under = 100` on the shipped web surface. The solver-strategy
   layer drives angr/unicorn/pwntools, so it is exercised end to end but left out
   of the line-coverage gate; `make coverage-strat` reports its real number, and a
   module only joins that opt-out list together with a golden-output test.
@@ -226,6 +226,16 @@ make coverage   # + term-missing / html / xml
 ## Roadmap
 
 **Recently shipped**
+- A full reliability audit of every autopwn solver strategy against real
+  end-to-end fixtures, fixing bugs the audit found rather than just
+  flagging them: a PLT/`.plt.sec` address-resolution bug that silently
+  broke call-target matching on any CET-compiled binary (the modern
+  toolchain default), a register/stack-spill tracking gap in the
+  use-after-free exploit chain, and a PE `VirtualSize`-vs-`SizeOfRawData`
+  bug that could resolve a virtual address to the wrong bytes.
+- An "Install" button on the Status panel: a missing optional engine
+  (angr, z3, unicorn, lief, capa, pwntools, ...) can be installed
+  directly from the UI instead of running pip by hand.
 - Native/WSL-aware solver routing: autopwn and the Status panel detect
   angr, z3, unicorn, and pwntools whether they're installed natively or
   only inside WSL, and route execution to whichever is actually available.
