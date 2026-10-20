@@ -16,6 +16,24 @@ from pathlib import Path
 # guessed from the proof text's shape.
 _SCRIPT_STRATEGIES = {"ret2win", "z3", "format_string", "uaf"}
 
+# Vulnerability/technique class per winning strategy, for the writeup's
+# labeled field (REPORT-01). Keyed on strategy identity, same as
+# ``_SCRIPT_STRATEGIES`` above — not guessed from proof/why text. Strategies
+# that recover a flag by analysis/simulation rather than exploiting a real
+# memory-safety bug are labeled as such rather than forced into a vuln class
+# that doesn't apply.
+_VULN_CLASS = {
+    "ret2win": "stack buffer overflow (ret2win)",
+    "format_string": "format string vulnerability",
+    "uaf": "use-after-free (dangling callback)",
+    "angr": "memory-safety bug recovered via symbolic execution",
+    "z3": "key-check guard recovered via constraint solving (no memory-safety bug)",
+    "keygen": "weak key-check guard (hard-coded compare, no memory-safety bug)",
+    "brute": "weak/brute-forceable secret (no memory-safety bug)",
+    "emulate": "flag recovered via emulation, not vulnerability exploitation",
+    "smc": "self-modifying/packed code, statically unwrapped (no memory-safety bug)",
+}
+
 
 def generate_writeup(result: dict) -> str:
     """Render ``result`` (an ``asdict(SolveResult)``-shaped dict) as Markdown."""
@@ -35,6 +53,9 @@ def generate_writeup(result: dict) -> str:
     if success:
         lines.append(f"- Flag: `{result.get('flag')}`")
         lines.append(f"- Winning strategy: `{result.get('strategy')}` in {seconds}s")
+        vuln_class = _VULN_CLASS.get(result.get("strategy") or "")
+        if vuln_class:
+            lines.append(f"- Vulnerability class: {vuln_class}")
     else:
         lines.append(f"- Solved: no (every strategy exhausted in {seconds}s)")
     lines.append("")

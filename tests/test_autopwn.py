@@ -1537,6 +1537,24 @@ def test_generate_writeup_renders_a_successful_script_based_solve():
     assert "win-style function + overflow sink" in md
     assert "```python" in md and "p.sendline" in md
     assert "| ret2win | flag |" in md
+    assert "Vulnerability class: stack buffer overflow (ret2win)" in md
+
+
+def test_generate_writeup_omits_vuln_class_for_an_unknown_strategy():
+    from triage_web.autopwn.writeup import generate_writeup
+
+    result = {
+        "path": "/ctf/samples/mystery",
+        "success": True,
+        "flag": "flag{x}",
+        "strategy": "some_future_strategy",
+        "seconds": 0.1,
+        "proof": "",
+        "attempts": [],
+        "recon": {},
+    }
+    md = generate_writeup(result)
+    assert "Vulnerability class" not in md
 
 
 def test_generate_writeup_explains_how_the_flag_was_found_without_a_script():
