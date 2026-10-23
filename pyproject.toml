@@ -46,11 +46,11 @@ triage-autopwn = "triage_web.autopwn.__main__:main"
 # accident via flare-capa's optional IDA-plugin chain, which a fresh
 # environment isn't guaranteed to resolve the same way.
 dev = [
-    "pytest>=8",
-    "pytest-cov>=5",
-    "ruff>=0.6.9",
-    "pre-commit>=3.8",
-    "pip-audit>=2.7",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.1",
+    "pre-commit>=4.7.0",
+    "pip-audit>=2.10.1",
     "httpx2>=2.12",
     "urllib3>=2.8.0",
     "virtualenv>=21.7.13",
